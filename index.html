@@ -153,7 +153,9 @@
 
     /* ABC list table */
     .abc-list-table { width: 100%; border-collapse: collapse; font-size: 12px; background: white; border-radius: 12px; overflow: hidden; }
-    .abc-list-table th { text-align: left; padding: 10px 10px; border-bottom: 2px solid #e5e5e5; color: #666; font-weight: 600; font-size: 11px; white-space: nowrap; position: sticky; top: 0; background: white; z-index: 1; }
+    .abc-list-table th { text-align: left; padding: 10px 10px; border-bottom: 2px solid #e5e5e5; color: #666; font-weight: 600; font-size: 11px; white-space: nowrap; position: sticky; top: 0; background: white; z-index: 1; cursor: pointer; user-select: none; }
+    .abc-list-table th:hover { color: #007aff; }
+    .abc-list-table th .sort-arrow { font-size: 10px; margin-left: 2px; color: #007aff; }
     .abc-list-table td { padding: 8px 10px; border-bottom: 1px solid #f0f0f0; white-space: nowrap; }
     .abc-list-table tr:hover { background: #f8f9fa; }
     .abc-list-table tr.row-stale { background: #fffef5; }
@@ -505,6 +507,8 @@ let abcArea = 'all';
 let abcView = 'list';
 let leadPeriod = '1w';
 let leadArea = 'all';
+let leadSort = { col: 'add_time', asc: false };
+let abcListSort = { col: null, asc: true };
 let chartInstances = {};
 let targets = JSON.parse(localStorage.getItem('salesTargets') || '{}');
 
@@ -976,6 +980,58 @@ function getLeadDateRange(period) {
   return { from: from.toISOString().substring(0, 10), to: to.toISOString().substring(0, 10) };
 }
 
+// ── Sort helpers ──
+function getDealSortValue(d, col) {
+  switch (col) {
+    case 'add_time': return d.add_time || '';
+    case 'stage': return d.stage_order_nr || 0;
+    case 'title': return d.title || '';
+    case 'owner': return d.owner_name || '';
+    case 'corp': return d[CF_CORP_TYPE] || 0;
+    case 'channel': return d[CF_CHANNEL] || 0;
+    case 'location': return d[CF_LOCATION] || 0;
+    case 'value': return d.value || 0;
+    case 'commission': return d[CF_COMMISSION] != null ? d[CF_COMMISSION] : DEFAULT_COMMISSION;
+    case 'cust_status': return d[CF_CUST_STATUS] || 0;
+    case 'new_switch': return d[CF_NEW_SWITCH] || 0;
+    case 'next_act': return d.next_activity_date || 'zz';
+    case 'elapsed': return daysSince(d.add_time);
+    case 'update_time': return d.update_time || '';
+    case 'stale': return daysSince(d.update_time);
+    case 'permit': return d[CF_PERMIT] || 0;
+    case 'rooms': return d[CF_ROOMS] || 0;
+    case 'type': return d[CF_TYPE] || 0;
+    case 'timing': return d[CF_TIMING] || 0;
+    default: return '';
+  }
+}
+function sortDeals(deals, sortState) {
+  if (!sortState.col) return deals;
+  return [...deals].sort((a, b) => {
+    let va = getDealSortValue(a, sortState.col);
+    let vb = getDealSortValue(b, sortState.col);
+    if (typeof va === 'number' && typeof vb === 'number') {
+      return sortState.asc ? va - vb : vb - va;
+    }
+    va = String(va); vb = String(vb);
+    return sortState.asc ? va.localeCompare(vb) : vb.localeCompare(va);
+  });
+}
+function sortArrow(sortState, col) {
+  if (sortState.col !== col) return '';
+  return `<span class="sort-arrow">${sortState.asc ? '▲' : '▼'}</span>`;
+}
+function toggleLeadSort(col) {
+  if (leadSort.col === col) { leadSort.asc = !leadSort.asc; }
+  else { leadSort.col = col; leadSort.asc = true; }
+  renderLeads();
+}
+function toggleAbcSort(col) {
+  if (abcListSort.col === col) { abcListSort.asc = !abcListSort.asc; }
+  else { abcListSort.col = col; abcListSort.asc = true; }
+  renderABCList();
+}
+
 function renderLeads() {
   const { from, to } = getLeadDateRange(leadPeriod);
   const areaDeals = filterByArea(allDeals, leadArea);
@@ -1015,13 +1071,26 @@ function renderLeads() {
   allStageColors[WON_STAGE] = '#00c7be';
   allStageColors[LOST_STAGE] = '#ff3b30';
 
+  const sortedLeads = sortDeals(leads, leadSort);
+
+  const sa = (col) => sortArrow(leadSort, col);
   let html = '<div class="abc-list-wrap"><table class="abc-list-table"><thead><tr>';
-  html += '<th>問合せ日</th><th>ステージ</th><th>案件名</th><th>担当</th><th>法人/個人</th>';
-  html += '<th>流入経路</th><th>エリア</th><th>GMV</th><th>手数料</th><th>顧客状況</th>';
-  html += '<th>新規/乗換</th><th>次アクション</th><th>経過日数</th>';
+  html += `<th onclick="toggleLeadSort('add_time')">問合せ日${sa('add_time')}</th>`;
+  html += `<th onclick="toggleLeadSort('stage')">ステージ${sa('stage')}</th>`;
+  html += `<th onclick="toggleLeadSort('title')">案件名${sa('title')}</th>`;
+  html += `<th onclick="toggleLeadSort('owner')">担当${sa('owner')}</th>`;
+  html += `<th onclick="toggleLeadSort('corp')">法人/個人${sa('corp')}</th>`;
+  html += `<th onclick="toggleLeadSort('channel')">流入経路${sa('channel')}</th>`;
+  html += `<th onclick="toggleLeadSort('location')">エリア${sa('location')}</th>`;
+  html += `<th onclick="toggleLeadSort('value')">GMV${sa('value')}</th>`;
+  html += `<th onclick="toggleLeadSort('commission')">手数料${sa('commission')}</th>`;
+  html += `<th onclick="toggleLeadSort('cust_status')">顧客状況${sa('cust_status')}</th>`;
+  html += `<th onclick="toggleLeadSort('new_switch')">新規/乗換${sa('new_switch')}</th>`;
+  html += `<th onclick="toggleLeadSort('next_act')">次アクション${sa('next_act')}</th>`;
+  html += `<th onclick="toggleLeadSort('elapsed')">経過日数${sa('elapsed')}</th>`;
   html += '</tr></thead><tbody>';
 
-  leads.forEach(d => {
+  sortedLeads.forEach(d => {
     const stageName = getStageNameById(d.stage_id);
     const stageColor = allStageColors[stageName] || '#999';
     const isLost = isLostDeal(d);
@@ -1183,13 +1252,18 @@ function renderABCList() {
   const areaDeals = filterByArea(allDeals, abcArea);
   const abcDeals = areaDeals.filter(d => isActiveDeal(d) && ABC_STAGES.includes(getStageNameById(d.stage_id)));
 
-  // Sort: A → B → C, then by stale desc
-  abcDeals.sort((a, b) => {
-    const ai = ABC_STAGES.indexOf(getStageNameById(a.stage_id));
-    const bi = ABC_STAGES.indexOf(getStageNameById(b.stage_id));
-    if (ai !== bi) return ai - bi;
-    return daysSince(b.update_time) - daysSince(a.update_time);
-  });
+  // Default sort: A → B → C, then by stale desc
+  let sortedAbc;
+  if (abcListSort.col) {
+    sortedAbc = sortDeals(abcDeals, abcListSort);
+  } else {
+    sortedAbc = [...abcDeals].sort((a, b) => {
+      const ai = ABC_STAGES.indexOf(getStageNameById(a.stage_id));
+      const bi = ABC_STAGES.indexOf(getStageNameById(b.stage_id));
+      if (ai !== bi) return ai - bi;
+      return daysSince(b.update_time) - daysSince(a.update_time);
+    });
+  }
 
   const container = document.getElementById('abcListContainer');
   if (abcDeals.length === 0) {
@@ -1197,13 +1271,26 @@ function renderABCList() {
     return;
   }
 
+  const sa = (col) => sortArrow(abcListSort, col);
   let html = '<div class="abc-list-wrap"><table class="abc-list-table"><thead><tr>';
-  html += '<th>ステージ</th><th>案件名</th><th>担当</th><th>法人/個人</th><th>エリア</th>';
-  html += '<th>GMV</th><th>手数料</th><th>物件タイプ</th><th>許可種類</th><th>居室</th>';
-  html += '<th>顧客状況</th><th>開始時期</th><th>次アクション</th><th>最終更新</th><th>停滞</th>';
+  html += `<th onclick="toggleAbcSort('stage')">ステージ${sa('stage')}</th>`;
+  html += `<th onclick="toggleAbcSort('title')">案件名${sa('title')}</th>`;
+  html += `<th onclick="toggleAbcSort('owner')">担当${sa('owner')}</th>`;
+  html += `<th onclick="toggleAbcSort('corp')">法人/個人${sa('corp')}</th>`;
+  html += `<th onclick="toggleAbcSort('location')">エリア${sa('location')}</th>`;
+  html += `<th onclick="toggleAbcSort('value')">GMV${sa('value')}</th>`;
+  html += `<th onclick="toggleAbcSort('commission')">手数料${sa('commission')}</th>`;
+  html += `<th onclick="toggleAbcSort('type')">物件タイプ${sa('type')}</th>`;
+  html += `<th onclick="toggleAbcSort('permit')">許可種類${sa('permit')}</th>`;
+  html += `<th onclick="toggleAbcSort('rooms')">居室${sa('rooms')}</th>`;
+  html += `<th onclick="toggleAbcSort('cust_status')">顧客状況${sa('cust_status')}</th>`;
+  html += `<th onclick="toggleAbcSort('timing')">開始時期${sa('timing')}</th>`;
+  html += `<th onclick="toggleAbcSort('next_act')">次アクション${sa('next_act')}</th>`;
+  html += `<th onclick="toggleAbcSort('update_time')">最終更新${sa('update_time')}</th>`;
+  html += `<th onclick="toggleAbcSort('stale')">停滞${sa('stale')}</th>`;
   html += '</tr></thead><tbody>';
 
-  abcDeals.forEach(d => {
+  sortedAbc.forEach(d => {
     const stageName = getStageNameById(d.stage_id);
     const stageShort = ABC_SHORT[stageName] || '?';
     const stageColor = ABC_COLORS[stageName] || '#999';
