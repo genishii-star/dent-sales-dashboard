@@ -1,0 +1,1495 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dent Inc. 営業ダッシュボード</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif; background: #f5f5f7; color: #1d1d1f; }
+
+    header { background: #1d1d1f; color: white; padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; }
+    header h1 { font-size: 18px; font-weight: 600; }
+    header .right { display: flex; align-items: center; gap: 16px; }
+    header .right span { font-size: 13px; color: #999; }
+    .refresh-btn { background: #333; border: 1px solid #555; color: #ccc; padding: 6px 14px; border-radius: 8px; font-size: 12px; cursor: pointer; }
+    .refresh-btn:hover { background: #444; color: white; }
+
+    /* タブ */
+    .tab-nav { background: white; border-bottom: 1px solid #e5e5e5; display: flex; padding: 0 32px; gap: 0; }
+    .tab-btn { padding: 14px 24px; border: none; background: none; font-size: 14px; color: #666; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }
+    .tab-btn:hover { color: #1d1d1f; }
+    .tab-btn.active { color: #007aff; border-bottom-color: #007aff; font-weight: 600; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .container { max-width: 1100px; margin: 0 auto; padding: 28px 24px; }
+
+    /* フィルター */
+    .filter-bar { background: white; border-radius: 12px; padding: 14px 20px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .filter-bar label { font-size: 12px; color: #666; font-weight: 600; }
+    .filter-pills { display: flex; gap: 8px; flex-wrap: wrap; }
+    .pill { padding: 6px 14px; border-radius: 20px; border: 1px solid #ddd; background: white; font-size: 12px; cursor: pointer; transition: all 0.15s; }
+    .pill:hover { border-color: #007aff; color: #007aff; }
+    .pill.active { background: #007aff; border-color: #007aff; color: white; }
+
+    /* KPIカード */
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+    .kpi-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .kpi-grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 20px; }
+    .kpi-card { background: white; border-radius: 12px; padding: 20px 24px; }
+    .kpi-card .label { font-size: 12px; color: #666; margin-bottom: 8px; }
+    .kpi-card .value { font-size: 24px; font-weight: 700; }
+    .kpi-card .sub { font-size: 12px; color: #999; margin-top: 4px; }
+    .kpi-card.positive .value { color: #34c759; }
+    .kpi-card.negative .value { color: #ff3b30; }
+    .kpi-card.neutral .value { color: #1d1d1f; }
+
+    /* ファネル */
+    .funnel-section { background: white; border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+    .funnel-section h2 { font-size: 14px; font-weight: 600; color: #666; margin-bottom: 16px; }
+    .funnel-row { display: flex; align-items: center; margin-bottom: 8px; gap: 12px; }
+    .funnel-label { width: 220px; font-size: 13px; flex-shrink: 0; display: flex; justify-content: space-between; }
+    .funnel-label .stage-name { color: #1d1d1f; }
+    .funnel-label .stage-count { color: #666; font-weight: 600; }
+    .funnel-bar-bg { flex: 1; background: #f0f0f0; border-radius: 6px; height: 28px; position: relative; overflow: hidden; }
+    .funnel-bar { height: 100%; border-radius: 6px; transition: width 0.5s; display: flex; align-items: center; padding-left: 10px; font-size: 11px; color: white; font-weight: 600; min-width: 0; }
+    .funnel-amount { width: 120px; text-align: right; font-size: 13px; font-weight: 600; color: #1d1d1f; flex-shrink: 0; }
+
+    /* チャート */
+    .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+    .chart-card { background: white; border-radius: 12px; padding: 24px; }
+    .chart-card.full { grid-column: 1 / -1; }
+    .chart-card h2 { font-size: 14px; font-weight: 600; color: #666; margin-bottom: 16px; }
+
+    /* テーブル */
+    .table-section { background: white; border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+    .table-section h2 { font-size: 14px; font-weight: 600; color: #666; margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; padding: 10px 12px; border-bottom: 2px solid #e5e5e5; color: #666; font-weight: 600; font-size: 12px; }
+    td { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; }
+    tr:hover { background: #fafafa; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    .badge-red { background: #ffe8e6; color: #ff3b30; }
+    .badge-orange { background: #fff3e0; color: #ff9500; }
+    .badge-green { background: #e8f8ec; color: #34c759; }
+    .badge-blue { background: #e6f0ff; color: #007aff; }
+
+    /* 目標設定 */
+    .target-section { background: white; border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+    .target-section h2 { font-size: 14px; font-weight: 600; color: #666; margin-bottom: 16px; }
+    .target-inputs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+    .target-inputs label { font-size: 12px; color: #666; display: block; margin-bottom: 4px; }
+    .target-inputs input { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; }
+    .target-inputs button { padding: 8px 16px; background: #1d1d1f; color: white; border: none; border-radius: 8px; font-size: 13px; cursor: pointer; align-self: end; }
+
+    /* 進捗バー */
+    .progress-section { background: white; border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+    .progress-section h2 { font-size: 14px; font-weight: 600; color: #666; margin-bottom: 16px; }
+    .progress-bar-bg { background: #f0f0f0; border-radius: 8px; height: 24px; position: relative; overflow: hidden; margin-bottom: 8px; }
+    .progress-bar-fill { height: 100%; border-radius: 8px; transition: width 0.5s; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: white; }
+    .progress-labels { display: flex; justify-content: space-between; font-size: 12px; color: #999; }
+
+
+
+    .loading { text-align: center; padding: 60px; color: #999; font-size: 14px; }
+
+    /* ABC詳細 */
+    .stage-group { background: white; border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+    .stage-group h2 { font-size: 15px; font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 10px; }
+    .stage-group .stage-summary { font-size: 12px; color: #999; margin-bottom: 16px; }
+    .stage-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .deal-card { border: 1px solid #e5e5e5; border-radius: 10px; padding: 16px; margin-bottom: 12px; transition: box-shadow 0.15s; }
+    .deal-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .deal-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+    .deal-card-header .deal-title { font-size: 14px; font-weight: 600; }
+    .deal-card-header .deal-owner { font-size: 12px; color: #666; }
+    .deal-meta { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-bottom: 10px; }
+    .deal-meta-item { font-size: 12px; }
+    .deal-meta-item .meta-label { color: #999; }
+    .deal-meta-item .meta-value { color: #1d1d1f; font-weight: 500; }
+    .deal-activity-row { display: flex; gap: 16px; font-size: 12px; color: #666; border-top: 1px solid #f0f0f0; padding-top: 10px; }
+    .deal-activity-row .act-item { display: flex; align-items: center; gap: 4px; }
+    .deal-notes { font-size: 12px; color: #444; background: #f9f9fb; border-radius: 6px; padding: 10px 12px; margin-top: 8px; white-space: pre-wrap; max-height: 80px; overflow-y: auto; }
+    .stale-warn { color: #ff9500; font-size: 11px; font-weight: 600; }
+    .overdue-warn { color: #ff3b30; font-size: 11px; font-weight: 600; }
+    .week-nav { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+    .week-nav button { padding: 4px 12px; border: 1px solid #ddd; background: white; border-radius: 6px; font-size: 12px; cursor: pointer; }
+    .week-nav button:hover { border-color: #007aff; color: #007aff; }
+    .week-nav span { font-size: 13px; font-weight: 600; }
+    .abc-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+    .abc-stat-card { background: white; border-radius: 12px; padding: 16px 20px; }
+    .abc-stat-card .label { font-size: 12px; color: #666; margin-bottom: 4px; }
+    .abc-stat-card .value { font-size: 20px; font-weight: 700; }
+    .abc-stat-card .sub { font-size: 11px; color: #999; margin-top: 2px; }
+
+    /* Editable fields — always visible inputs */
+    .ef-input { padding: 4px 8px; border: 1px solid #e5e5e5; border-radius: 6px; font-size: 12px; width: 100%; background: white; font-family: inherit; }
+    .ef-input:focus { outline: none; border-color: #007aff; box-shadow: 0 0 0 2px rgba(0,122,255,0.1); }
+    .ef-input.ef-empty { border-color: #ffcc00; background: #fffef5; }
+    .ef-input.ef-changed { border-color: #007aff; background: #f0f7ff; }
+    .deal-save-row { display: flex; justify-content: flex-end; padding-top: 10px; border-top: 1px solid #f0f0f0; margin-top: 10px; }
+    .deal-save-btn { padding: 8px 24px; background: #007aff; color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .deal-save-btn:hover { background: #0066d6; }
+    .deal-save-btn:disabled { background: #ccc; cursor: default; }
+
+    /* View toggle */
+    .view-toggle { display: flex; gap: 4px; margin-left: auto; }
+
+    /* ABC list table */
+    .abc-list-table { width: 100%; border-collapse: collapse; font-size: 12px; background: white; border-radius: 12px; overflow: hidden; }
+    .abc-list-table th { text-align: left; padding: 10px 10px; border-bottom: 2px solid #e5e5e5; color: #666; font-weight: 600; font-size: 11px; white-space: nowrap; position: sticky; top: 0; background: white; z-index: 1; }
+    .abc-list-table td { padding: 8px 10px; border-bottom: 1px solid #f0f0f0; white-space: nowrap; }
+    .abc-list-table tr:hover { background: #f8f9fa; }
+    .abc-list-table tr.row-stale { background: #fffef5; }
+    .abc-list-table tr.row-overdue { background: #fff5f5; }
+    .stage-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; color: white; }
+    .abc-list-wrap { background: white; border-radius: 12px; overflow-x: auto; margin-bottom: 20px; }
+    .abc-list-table tbody tr { cursor: pointer; }
+
+    /* Modal */
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 9000; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+    .modal-overlay.open { opacity: 1; pointer-events: auto; }
+    .modal-body { background: #f5f5f7; border-radius: 16px; width: 720px; max-width: 95vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 8px 40px rgba(0,0,0,0.2); padding: 28px; position: relative; }
+    .modal-close { position: absolute; top: 12px; right: 16px; background: none; border: none; font-size: 20px; color: #999; cursor: pointer; z-index: 1; }
+    .modal-close:hover { color: #1d1d1f; }
+
+    /* Add note / activity inline */
+    .add-row { display: flex; gap: 8px; margin-top: 8px; padding-top: 10px; border-top: 1px solid #f0f0f0; }
+    .add-row input, .add-row textarea { flex: 1; padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; font-family: inherit; }
+    .add-row textarea { resize: vertical; min-height: 32px; }
+    .add-row button { padding: 6px 14px; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .add-row .btn-note { background: #f0f0f0; color: #1d1d1f; }
+    .add-row .btn-note:hover { background: #e5e5e5; }
+    .add-row .btn-act { background: #007aff; color: white; }
+    .add-row .btn-act:hover { background: #0066d6; }
+    .toast { position: fixed; bottom: 24px; right: 24px; background: #1d1d1f; color: white; padding: 12px 20px; border-radius: 10px; font-size: 13px; z-index: 10000; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<div id="app-content" class="visible">
+<header>
+  <h1>Dent Inc. 営業ダッシュボード</h1>
+  <div class="right">
+    <span id="lastUpdated">-</span>
+    <button class="refresh-btn" onclick="loadAll()">更新</button>
+  </div>
+</header>
+
+<div class="tab-nav">
+  <button class="tab-btn active" onclick="switchTab('pipeline')">パイプライン</button>
+  <button class="tab-btn" onclick="switchTab('abc')">ABC詳細</button>
+  <button class="tab-btn" onclick="switchTab('results')">営業実績</button>
+  <button class="tab-btn" onclick="switchTab('forecast')">売上予測</button>
+  <button class="tab-btn" onclick="switchTab('activity')">アクティビティ</button>
+</div>
+
+<!-- ========== パイプライン タブ ========== -->
+<div id="tab-pipeline" class="tab-content active">
+<div class="container">
+  <div class="filter-bar">
+    <label>エリア</label>
+    <div class="filter-pills" id="areaPills">
+      <button class="pill active" onclick="setArea('all')">全体</button>
+      <button class="pill" onclick="setArea(1)">関西＆その他</button>
+      <button class="pill" onclick="setArea(7)">関東</button>
+    </div>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card neutral"><div class="label">進行中案件</div><div class="value" id="kpiOpen">-</div><div class="sub" id="kpiOpenSub">-</div></div>
+    <div class="kpi-card neutral"><div class="label">GMV総額</div><div class="value" id="kpiPipeValue">-</div><div class="sub" id="kpiPipeValueSub">-</div></div>
+    <div class="kpi-card neutral"><div class="label">加重GMV</div><div class="value" id="kpiWeighted">-</div><div class="sub" id="kpiWeightedSub">確度 × GMV</div></div>
+    <div class="kpi-card neutral"><div class="label">平均GMV</div><div class="value" id="kpiAvgDeal">-</div><div class="sub" id="kpiAvgDealSub">-</div></div>
+  </div>
+
+  <div class="funnel-section">
+    <h2>ステージ別ファネル</h2>
+    <div id="funnelContainer"><div class="loading">読み込み中...</div></div>
+  </div>
+
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h2>エリア別 案件数</h2>
+      <canvas id="chartAreaDeals"></canvas>
+    </div>
+    <div class="chart-card">
+      <h2>エリア別 パイプライン金額</h2>
+      <canvas id="chartAreaValue"></canvas>
+    </div>
+  </div>
+
+  <div class="table-section">
+    <h2>停滞案件（30日以上更新なし）</h2>
+    <table id="staleTable">
+      <thead><tr><th>案件名</th><th>ステージ</th><th>金額</th><th>最終更新</th><th>停滞日数</th></tr></thead>
+      <tbody id="staleBody"><tr><td colspan="5" class="loading">読み込み中...</td></tr></tbody>
+    </table>
+  </div>
+</div>
+</div>
+
+<!-- ========== ABC詳細 タブ ========== -->
+<div id="tab-abc" class="tab-content">
+<div class="container">
+  <div class="filter-bar">
+    <label>エリア</label>
+    <div class="filter-pills" id="abcAreaPills">
+      <button class="pill active" onclick="setAbcArea('all')">全体</button>
+      <button class="pill" onclick="setAbcArea(1)">関西＆その他</button>
+      <button class="pill" onclick="setAbcArea(7)">関東</button>
+    </div>
+    <div class="view-toggle">
+      <button class="pill active" id="viewListBtn" onclick="setAbcView('list')">一覧</button>
+      <button class="pill" id="viewDetailBtn" onclick="setAbcView('detail')">詳細</button>
+    </div>
+  </div>
+
+  <div class="abc-stats" id="abcStats"></div>
+
+  <div id="abcListContainer" style="display:block;"><div class="loading">読み込み中...</div></div>
+  <div id="abcContainer" style="display:none;"><div class="loading">読み込み中...</div></div>
+</div>
+</div>
+
+<!-- ========== 営業実績 タブ ========== -->
+<div id="tab-results" class="tab-content">
+<div class="container">
+  <div class="filter-bar">
+    <label>エリア</label>
+    <div class="filter-pills" id="resultAreaPills">
+      <button class="pill active" onclick="setResultArea('all')">全体</button>
+      <button class="pill" onclick="setResultArea(1)">関西＆その他</button>
+      <button class="pill" onclick="setResultArea(7)">関東</button>
+    </div>
+  </div>
+
+  <div class="kpi-grid-5">
+    <div class="kpi-card neutral"><div class="label">今月成約</div><div class="value" id="kpiWonMonth">-</div><div class="sub" id="kpiWonMonthSub">-</div></div>
+    <div class="kpi-card neutral"><div class="label">今月失注</div><div class="value" id="kpiLostMonth">-</div><div class="sub" id="kpiLostMonthSub">-</div></div>
+    <div class="kpi-card neutral"><div class="label">成約率</div><div class="value" id="kpiWinRate">-</div><div class="sub">成約/(成約+失注)</div></div>
+    <div class="kpi-card neutral"><div class="label">累計成約</div><div class="value" id="kpiWonTotal">-</div><div class="sub" id="kpiWonTotalSub">-</div></div>
+    <div class="kpi-card neutral"><div class="label">平均成約日数</div><div class="value" id="kpiAvgDays">-</div><div class="sub">リード→受注</div></div>
+  </div>
+
+  <div class="charts-grid">
+    <div class="chart-card full">
+      <h2>月次 成約・失注推移</h2>
+      <canvas id="chartMonthly"></canvas>
+    </div>
+  </div>
+
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h2>成約率推移</h2>
+      <canvas id="chartWinRate"></canvas>
+    </div>
+    <div class="chart-card">
+      <h2>成約金額推移</h2>
+      <canvas id="chartWonValue"></canvas>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ========== 売上予測 タブ ========== -->
+<div id="tab-forecast" class="tab-content">
+<div class="container">
+  <div class="target-section">
+    <h2>月次目標設定</h2>
+    <div class="target-inputs">
+      <div>
+        <label>月間成約目標（件数）</label>
+        <input type="number" id="targetDeals" value="" placeholder="例: 5">
+      </div>
+      <div>
+        <label>月間成約目標（金額）</label>
+        <input type="text" id="targetValue" value="" placeholder="例: 2,000,000">
+      </div>
+      <div>
+        <button onclick="saveTargets()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="targetProgressSection" style="display:none;">
+    <div class="progress-section">
+      <h2>今月の進捗 <span id="forecastMonth" style="font-weight:400;color:#aaa;font-size:12px;"></span></h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+        <div>
+          <div style="font-size:12px;color:#666;margin-bottom:8px;">成約件数</div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="progressDeals" style="width:0%;background:#007aff;">0%</div>
+          </div>
+          <div class="progress-labels"><span id="progDealsActual">0件</span><span id="progDealsTarget">目標: -</span></div>
+        </div>
+        <div>
+          <div style="font-size:12px;color:#666;margin-bottom:8px;">成約金額</div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="progressValue" style="width:0%;background:#34c759;">0%</div>
+          </div>
+          <div class="progress-labels"><span id="progValueActual">¥0</span><span id="progValueTarget">目標: -</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="kpi-grid-3">
+    <div class="kpi-card neutral"><div class="label">加重パイプライン</div><div class="value" id="fcWeighted">-</div><div class="sub">確度ベースの見込み売上</div></div>
+    <div class="kpi-card neutral"><div class="label">今月着地予測</div><div class="value" id="fcThisMonth">-</div><div class="sub">成約予定日ベース</div></div>
+    <div class="kpi-card neutral"><div class="label">BEPまで</div><div class="value" id="fcBEP">-</div><div class="sub" id="fcBEPSub">PM単価 ¥46,247 で計算</div></div>
+  </div>
+
+  <div class="charts-grid">
+    <div class="chart-card full">
+      <h2>月別 着地予測（成約予定日ベース）</h2>
+      <canvas id="chartForecast"></canvas>
+    </div>
+  </div>
+
+  <div class="charts-grid">
+    <div class="chart-card full">
+      <h2>目標 vs 実績 vs 予測</h2>
+      <canvas id="chartTargetVsActual"></canvas>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ========== アクティビティ タブ ========== -->
+<div id="tab-activity" class="tab-content">
+<div class="container">
+  <div class="kpi-grid">
+    <div class="kpi-card neutral"><div class="label">今月アクティビティ</div><div class="value" id="kpiActMonth">-</div><div class="sub" id="kpiActMonthSub">-</div></div>
+    <div class="kpi-card neutral"><div class="label">完了率</div><div class="value" id="kpiActDone">-</div><div class="sub">完了/全体</div></div>
+    <div class="kpi-card neutral"><div class="label">未対応</div><div class="value" id="kpiActOverdue">-</div><div class="sub">期日超過</div></div>
+    <div class="kpi-card neutral"><div class="label">成約あたり活動数</div><div class="value" id="kpiActPerWon">-</div><div class="sub">平均</div></div>
+  </div>
+
+  <div class="charts-grid">
+    <div class="chart-card full">
+      <h2>月次アクティビティ推移</h2>
+      <canvas id="chartActivity"></canvas>
+    </div>
+  </div>
+
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h2>種別内訳</h2>
+      <canvas id="chartActType"></canvas>
+    </div>
+    <div class="chart-card">
+      <h2>担当者別 活動量（今月）</h2>
+      <canvas id="chartActUser"></canvas>
+    </div>
+  </div>
+</div>
+</div>
+
+</div><!-- /app-content -->
+<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal-body" id="modalBody">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div id="modalContent"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Config ──
+const API_TOKEN = '1c70a37d4df38b7f1bdf63c5d5b226593dbd7ea5';
+const API_BASE = 'https://api.pipedrive.com/v1';
+const PIPELINE_IDS = [1, 7];
+const PM_UNIT_PRICE = 46247;
+const BEP_PROPERTIES = 128;
+
+// Stage order & colors (shared between pipelines)
+// S：受注 is treated as "won" — shown separately, not in the active funnel
+const STAGE_ORDER_ACTIVE = ['リード','F：情報収集','E：商談化（民泊やりたい）','D：物件選定中、民泊時期未定','C：物件決定、サービス理解⚪︎','B：民泊時期⚪︎、Dentほぼ決定','A：決裁者によるDent内諾'];
+const STAGE_COLORS = ['#007aff','#5856d6','#af52de','#ff9500','#ffcc00','#34c759','#30d158'];
+const WON_STAGE = 'S：受注';
+const LOST_STAGE = 'G：興味なし（失注）';
+const ABC_STAGES = ['A：決裁者によるDent内諾','B：民泊時期⚪︎、Dentほぼ決定','C：物件決定、サービス理解⚪︎'];
+const ABC_COLORS = { 'A：決裁者によるDent内諾': '#30d158', 'B：民泊時期⚪︎、Dentほぼ決定': '#34c759', 'C：物件決定、サービス理解⚪︎': '#ffcc00' };
+const ABC_SHORT = { 'A：決裁者によるDent内諾': 'A', 'B：民泊時期⚪︎、Dentほぼ決定': 'B', 'C：物件決定、サービス理解⚪︎': 'C' };
+
+// Custom field keys
+const CF_LOCATION = 'a6882ece3ac2c6059643d7c67f44242997d924a8';
+const CF_TIMING = 'e96057b3bee23ba857cf0b395f675204b1086910';
+const CF_TYPE = '9df61919d7f329eb25136203d2f411d1adf6dcee';
+const CF_LAYOUT = 'e277b3a6c27291e7fba1b8d75e9bc9753e521d7d';
+const CF_ADDRESS = '10a9f42698cca95b4c4e02107b9b5672797b5fee';
+const CF_COMMISSION = '4ebff3f77c072726e479143f58689e5d91d54d2b';
+const CF_CORP_TYPE = 'adc95c8294c28139ccdcb2f9ba8b687157e2985f';
+const CF_CHANNEL = '26c39e338716ee32db8c73e51592370391b53de8';
+const CF_REFERRER = '0c92efc0bc729eb0afb010dcc6225c7be5ee5859';
+const CF_CUST_STATUS = 'df71bbcb405d2a8b29e53546c9fead3643c8e29c';
+const CF_NEW_SWITCH = 'c29a96c836b7dd76cb131ca6b84c64f5f8a6a346';
+const CF_PERMIT = 'bf0ba37c233695fa72fab90d0a9d73fabc4e47f4';
+const CF_ROOMS = '5755330f5fdfdfd640e432fd22b3610ccd466bb0';
+const DEFAULT_COMMISSION = 20;
+
+// Enum label maps
+const LOCATION_MAP = {112:'東京都（23区内）',113:'東京都（23区以外）',114:'大阪府',115:'京都府',116:'北海道',128:'神奈川県',127:'千葉県',126:'埼玉県',140:'兵庫県',141:'奈良県',139:'滋賀県',137:'愛知県',152:'福岡県',159:'沖縄県'};
+const TIMING_MAP = {108:'すぐにでも',109:'6ヶ月以内',110:'1年以内',111:'未定'};
+const TYPE_MAP = {160:'戸建て',161:'マンション',162:'マンション一棟'};
+const LAYOUT_MAP = {166:'1R',167:'1K',168:'1DK',169:'1LDK',170:'2K',171:'2DK',172:'2LDK',173:'3K',174:'3DK',175:'3LDK',176:'4LDK',177:'その他'};
+const CORP_MAP = {199:'法人',200:'個人'};
+const CHANNEL_MAP = {201:'問い合わせ',202:'知人紹介',203:'既存オーナー',204:'広告',205:'その他'};
+const CUST_STATUS_MAP = {206:'意思◯物件◯開始◯',207:'意思◯物件◯開始×',208:'意思◯物件×',209:'情報収集中'};
+const NEW_SWITCH_MAP = {210:'新規',211:'乗り換え'};
+const PERMIT_MAP = {212:'民泊新法',213:'特区民泊',214:'旅館業'};
+
+// ── State ──
+let allDeals = [];
+let allStages = [];
+let allNotes = {};
+let currentArea = 'all';
+let resultArea = 'all';
+let abcArea = 'all';
+let abcView = 'list';
+let chartInstances = {};
+let targets = JSON.parse(localStorage.getItem('salesTargets') || '{}');
+
+// Highlight changed fields
+document.addEventListener('input', e => {
+  if (e.target.classList.contains('ef-input')) {
+    const orig = e.target.dataset.orig;
+    e.target.classList.toggle('ef-changed', e.target.value !== orig);
+  }
+});
+document.addEventListener('change', e => {
+  if (e.target.classList.contains('ef-input')) {
+    const orig = e.target.dataset.orig;
+    e.target.classList.toggle('ef-changed', e.target.value !== orig);
+  }
+});
+
+// Auto-load on start
+loadAll();
+
+// ── Tabs ──
+function switchTab(id) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ── Area filter ──
+function setArea(v) {
+  currentArea = v;
+  document.querySelectorAll('#areaPills .pill').forEach(p => p.classList.remove('active'));
+  event.target.classList.add('active');
+  renderPipeline();
+}
+function setResultArea(v) {
+  resultArea = v;
+  document.querySelectorAll('#resultAreaPills .pill').forEach(p => p.classList.remove('active'));
+  event.target.classList.add('active');
+  renderResults();
+}
+function setAbcArea(v) {
+  abcArea = v;
+  document.querySelectorAll('#abcAreaPills .pill').forEach(p => p.classList.remove('active'));
+  event.target.classList.add('active');
+  renderABC();
+  renderABCList();
+}
+function setAbcView(v) {
+  abcView = v;
+  document.getElementById('viewListBtn').classList.toggle('active', v === 'list');
+  document.getElementById('viewDetailBtn').classList.toggle('active', v === 'detail');
+  document.getElementById('abcListContainer').style.display = v === 'list' ? 'block' : 'none';
+  document.getElementById('abcContainer').style.display = v === 'detail' ? 'block' : 'none';
+}
+
+// ── API helpers ──
+async function apiFetch(endpoint, params = {}) {
+  params.api_token = API_TOKEN;
+  const url = new URL(API_BASE + endpoint);
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  const res = await fetch(url);
+  return res.json();
+}
+
+async function apiFetchAll(endpoint, params = {}) {
+  let all = [];
+  let start = 0;
+  const limit = 500;
+  while (true) {
+    const data = await apiFetch(endpoint, { ...params, start, limit });
+    if (!data.success || !data.data) break;
+    all = all.concat(data.data);
+    if (!data.additional_data?.pagination?.more_items_in_collection) break;
+    start = data.additional_data.pagination.next_start;
+  }
+  return all;
+}
+
+// ── Derived helpers ──
+// "Won" = open deal sitting in S：受注 stage. "Lost" = open deal in G：興味なし stage.
+function isWonDeal(d) { return d.status === 'open' && getStageNameById(d.stage_id) === WON_STAGE; }
+function isLostDeal(d) { return (d.status === 'lost') || (d.status === 'open' && getStageNameById(d.stage_id) === LOST_STAGE); }
+function isActiveDeal(d) { return d.status === 'open' && !isWonDeal(d) && !isLostDeal(d); }
+// Won date = stage_change_time (when moved to S). Lost date = stage_change_time or lost_time.
+function getWonDate(d) { return d.stage_change_time || d.update_time; }
+function getLostDate(d) { return d.lost_time || d.stage_change_time || d.update_time; }
+
+// ── Load all data ──
+async function loadAll() {
+  document.getElementById('lastUpdated').textContent = '読み込み中...';
+  try {
+    const [stages, openDeals, wonDeals, lostDeals] = await Promise.all([
+      apiFetchAll('/stages'),
+      apiFetchAll('/deals', { status: 'open' }),
+      apiFetchAll('/deals', { status: 'won' }),
+      apiFetchAll('/deals', { status: 'lost' }),
+    ]);
+
+    allStages = stages.filter(s => PIPELINE_IDS.includes(s.pipeline_id));
+    // Include PD-won deals too (historical), but primary "won" logic is stage-based
+    allDeals = [...openDeals, ...wonDeals, ...lostDeals].filter(d => PIPELINE_IDS.includes(d.pipeline_id));
+
+    renderPipeline();
+    renderABCList();
+    renderABC();
+    renderResults();
+    renderForecast();
+    renderActivity();
+
+    // Fetch notes for ABC deals in background
+    loadAbcNotes();
+
+    const now = new Date();
+    document.getElementById('lastUpdated').textContent = `最終更新: ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
+  } catch (e) {
+    console.error(e);
+    document.getElementById('lastUpdated').textContent = 'エラー';
+  }
+}
+
+// ── Helpers ──
+function fmt(n) { return n == null ? '-' : '¥' + Math.round(n).toLocaleString(); }
+function fmtNum(n) { return n == null ? '-' : n.toLocaleString(); }
+function filterByArea(deals, area) {
+  if (area === 'all') return deals.filter(d => PIPELINE_IDS.includes(d.pipeline_id));
+  return deals.filter(d => d.pipeline_id === area);
+}
+function getStageNameById(id) {
+  const s = allStages.find(st => st.id === id);
+  return s ? s.name : '不明';
+}
+function getStageProbById(id) {
+  const s = allStages.find(st => st.id === id);
+  return s ? s.deal_probability / 100 : 0;
+}
+function daysSince(dateStr) {
+  if (!dateStr) return 999;
+  return Math.floor((new Date() - new Date(dateStr)) / 86400000);
+}
+function monthKey(dateStr) {
+  if (!dateStr) return null;
+  return dateStr.substring(0, 7);
+}
+function destroyChart(key) {
+  if (chartInstances[key]) { chartInstances[key].destroy(); delete chartInstances[key]; }
+}
+
+// ── Render: Pipeline tab ──
+function renderPipeline() {
+  const areaDeals = filterByArea(allDeals, currentArea);
+  const activeDeals = areaDeals.filter(isActiveDeal);
+  const wonDeals = areaDeals.filter(isWonDeal);
+
+  // KPIs — value = GMV
+  const totalGMV = activeDeals.reduce((s, d) => s + (d.value || 0), 0);
+  const weightedGMV = activeDeals.reduce((s, d) => s + (d.value || 0) * getStageProbById(d.stage_id), 0);
+  const avgGMV = activeDeals.length > 0 ? totalGMV / activeDeals.length : 0;
+
+  document.getElementById('kpiOpen').textContent = fmtNum(activeDeals.length) + '件';
+  document.getElementById('kpiOpenSub').textContent = `関西: ${allDeals.filter(d=>d.pipeline_id===1&&isActiveDeal(d)).length}件 / 関東: ${allDeals.filter(d=>d.pipeline_id===7&&isActiveDeal(d)).length}件 / 受注済: ${wonDeals.length}件`;
+  document.getElementById('kpiPipeValue').textContent = fmt(totalGMV);
+  document.getElementById('kpiPipeValueSub').textContent = `${activeDeals.filter(d=>(d.value||0)>0).length}件に金額設定`;
+  document.getElementById('kpiWeighted').textContent = fmt(weightedGMV);
+  document.getElementById('kpiWeightedSub').textContent = '確度 × GMV';
+  document.getElementById('kpiAvgDeal').textContent = fmt(avgGMV);
+  const withValue = activeDeals.filter(d=>(d.value||0)>0);
+  document.getElementById('kpiAvgDealSub').textContent = `金額設定済み: ${fmt(withValue.length > 0 ? withValue.reduce((s,d)=>s+d.value,0)/withValue.length : 0)}`;
+
+  // Funnel (active stages only — S：受注 excluded since those are "won")
+  const container = document.getElementById('funnelContainer');
+  container.innerHTML = '';
+  const stageCounts = {};
+  const stageValues = {};
+  STAGE_ORDER_ACTIVE.forEach(s => { stageCounts[s] = 0; stageValues[s] = 0; });
+  activeDeals.forEach(d => {
+    const name = getStageNameById(d.stage_id);
+    if (stageCounts[name] !== undefined) {
+      stageCounts[name]++;
+      stageValues[name] += (d.value || 0);
+    }
+  });
+  const maxCount = Math.max(...Object.values(stageCounts), 1);
+
+  STAGE_ORDER_ACTIVE.forEach((stage, i) => {
+    const row = document.createElement('div');
+    row.className = 'funnel-row';
+    const pct = (stageCounts[stage] / maxCount * 100);
+    row.innerHTML = `
+      <div class="funnel-label"><span class="stage-name">${stage}</span><span class="stage-count">${stageCounts[stage]}件</span></div>
+      <div class="funnel-bar-bg"><div class="funnel-bar" style="width:${Math.max(pct,2)}%;background:${STAGE_COLORS[i]}">${pct > 15 ? stageCounts[stage] + '件' : ''}</div></div>
+      <div class="funnel-amount">${fmt(stageValues[stage])}</div>`;
+    container.appendChild(row);
+  });
+
+  // Area charts
+  const kansaiActive = allDeals.filter(d => d.pipeline_id === 1 && isActiveDeal(d));
+  const kantoActive = allDeals.filter(d => d.pipeline_id === 7 && isActiveDeal(d));
+
+  const areaDealData = STAGE_ORDER_ACTIVE.map(s => ({
+    stage: s.replace(/[A-Z]：|[A-Z]：/g, '').substring(0, 8),
+    kansai: kansaiActive.filter(d => getStageNameById(d.stage_id) === s).length,
+    kanto: kantoActive.filter(d => getStageNameById(d.stage_id) === s).length,
+  }));
+
+  destroyChart('areaDeals');
+  chartInstances.areaDeals = new Chart(document.getElementById('chartAreaDeals'), {
+    type: 'bar',
+    data: {
+      labels: areaDealData.map(d => d.stage),
+      datasets: [
+        { label: '関西', data: areaDealData.map(d => d.kansai), backgroundColor: '#007aff' },
+        { label: '関東', data: areaDealData.map(d => d.kanto), backgroundColor: '#ff9500' },
+      ]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'top' } }, scales: { x: { ticks: { font: { size: 10 } } } } }
+  });
+
+  const areaValueData = STAGE_ORDER_ACTIVE.map(s => ({
+    stage: s.replace(/[A-Z]：|[A-Z]：/g, '').substring(0, 8),
+    kansai: kansaiActive.filter(d => getStageNameById(d.stage_id) === s).reduce((sum, d) => sum + (d.value || 0), 0),
+    kanto: kantoActive.filter(d => getStageNameById(d.stage_id) === s).reduce((sum, d) => sum + (d.value || 0), 0),
+  }));
+
+  destroyChart('areaValue');
+  chartInstances.areaValue = new Chart(document.getElementById('chartAreaValue'), {
+    type: 'bar',
+    data: {
+      labels: areaValueData.map(d => d.stage),
+      datasets: [
+        { label: '関西', data: areaValueData.map(d => d.kansai), backgroundColor: '#007aff' },
+        { label: '関東', data: areaValueData.map(d => d.kanto), backgroundColor: '#ff9500' },
+      ]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'top' } }, scales: { y: { ticks: { callback: v => '¥' + (v/10000).toFixed(0) + '万' } }, x: { ticks: { font: { size: 10 } } } } }
+  });
+
+  // Stale deals (active only — excludes S：受注 and G：失注)
+  const staleDeals = activeDeals.filter(d => daysSince(d.update_time) >= 30)
+    .sort((a, b) => daysSince(b.update_time) - daysSince(a.update_time))
+    .slice(0, 20);
+  const tbody = document.getElementById('staleBody');
+  if (staleDeals.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:#999;text-align:center;">停滞案件なし</td></tr>';
+  } else {
+    tbody.innerHTML = staleDeals.map(d => {
+      const days = daysSince(d.update_time);
+      const badge = days >= 90 ? 'badge-red' : days >= 60 ? 'badge-orange' : 'badge-blue';
+      return `<tr>
+        <td>${d.title}</td>
+        <td>${getStageNameById(d.stage_id)}</td>
+        <td>${fmt(d.value)}</td>
+        <td>${d.update_time?.substring(0, 10) || '-'}</td>
+        <td><span class="badge ${badge}">${days}日</span></td>
+      </tr>`;
+    }).join('');
+  }
+}
+
+// ── Render: ABC詳細 tab ──
+async function loadAbcNotes() {
+  const abcDeals = allDeals.filter(d => isActiveDeal(d) && ABC_STAGES.includes(getStageNameById(d.stage_id)));
+  // Fetch notes for each ABC deal (parallel, batched)
+  const promises = abcDeals.map(async d => {
+    try {
+      const res = await apiFetch(`/deals/${d.id}/notes`, { limit: 3, sort: 'add_time DESC' });
+      if (res.success && res.data) allNotes[d.id] = res.data;
+    } catch(e) {}
+  });
+  await Promise.all(promises);
+  renderABC(); // re-render with notes
+}
+
+// ── Toast notification ──
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── API update helpers ──
+async function apiPut(endpoint, body) {
+  const res = await fetch(API_BASE + endpoint + '?api_token=' + API_TOKEN, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  });
+  return res.json();
+}
+async function apiPost(endpoint, body) {
+  const res = await fetch(API_BASE + endpoint + '?api_token=' + API_TOKEN, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  });
+  return res.json();
+}
+
+
+// Add a note to a deal
+async function addDealNote(dealId) {
+  const el = document.getElementById(`note-input-${dealId}`);
+  const text = el?.value?.trim();
+  if (!text) return;
+  el.disabled = true;
+  const res = await apiPost('/notes', { deal_id: dealId, content: text });
+  if (res.success) {
+    if (!allNotes[dealId]) allNotes[dealId] = [];
+    allNotes[dealId].unshift(res.data);
+    showToast('メモを追加しました');
+    renderABC();
+    if (modalDealId === dealId) renderDealModal(dealId);
+  } else {
+    showToast('メモの追加に失敗しました');
+    el.disabled = false;
+  }
+}
+
+// Add a next activity to a deal
+async function addDealActivity(dealId) {
+  const dateEl = document.getElementById(`act-date-${dealId}`);
+  const subjEl = document.getElementById(`act-subj-${dealId}`);
+  const date = dateEl?.value;
+  const subj = subjEl?.value?.trim() || 'フォローアップ';
+  if (!date) { showToast('日付を入力してください'); return; }
+  dateEl.disabled = true; subjEl.disabled = true;
+  const res = await apiPost('/activities', { deal_id: dealId, due_date: date, subject: subj, type: 'task' });
+  if (res.success) {
+    // Refresh the deal to get updated next_activity fields
+    const dealRes = await apiFetch(`/deals/${dealId}`);
+    if (dealRes.success) {
+      const idx = allDeals.findIndex(d => d.id === dealId);
+      if (idx >= 0) Object.assign(allDeals[idx], dealRes.data);
+    }
+    showToast('アクティビティを追加しました');
+    renderABC();
+    if (modalDealId === dealId) renderDealModal(dealId);
+  } else {
+    showToast('追加に失敗しました');
+    dateEl.disabled = false; subjEl.disabled = false;
+  }
+}
+
+// Build an editable field — always shown as input, no click-to-toggle
+function editableField(dealId, field, currentValue, displayValue, type, options) {
+  const isEmpty = !currentValue || currentValue === '-';
+  const eid = `ef-${dealId}-${field}`;
+
+  if (type === 'select') {
+    const optHtml = Object.entries(options).map(([k, v]) =>
+      `<option value="${k}" ${String(currentValue) === String(k) ? 'selected' : ''}>${v}</option>`
+    ).join('');
+    return `<select id="${eid}" class="ef-input${isEmpty ? ' ef-empty' : ''}" data-deal="${dealId}" data-field="${field}" data-orig="${currentValue || ''}"><option value="">--</option>${optHtml}</select>`;
+  } else {
+    const inputType = type === 'number' ? 'number' : 'text';
+    const val = currentValue && currentValue !== '-' ? currentValue : '';
+    return `<input type="${inputType}" id="${eid}" class="ef-input${isEmpty ? ' ef-empty' : ''}" data-deal="${dealId}" data-field="${field}" data-orig="${val}" value="${val}" placeholder="${displayValue || '未入力'}">`;
+  }
+}
+
+// Collect all changed fields for a deal and save in one API call
+async function saveDeal(dealId) {
+  const inputs = document.querySelectorAll(`#deal-card-${dealId} .ef-input`);
+  const body = {};
+  inputs.forEach(el => {
+    const field = el.dataset.field;
+    const orig = el.dataset.orig;
+    const val = el.value;
+    if (val !== orig) {
+      body[field] = val;
+    }
+  });
+  if (Object.keys(body).length === 0) {
+    showToast('変更はありません');
+    return;
+  }
+  const btn = document.getElementById(`save-btn-${dealId}`);
+  btn.disabled = true;
+  btn.textContent = '保存中...';
+  const res = await apiPut(`/deals/${dealId}`, body);
+  if (res.success) {
+    const idx = allDeals.findIndex(d => d.id === dealId);
+    if (idx >= 0) Object.assign(allDeals[idx], res.data);
+    showToast(`${Object.keys(body).length}件の項目を保存しました`);
+    renderPipeline();
+    renderABCList();
+    renderABC();
+    if (modalDealId === dealId) renderDealModal(dealId);
+  } else {
+    showToast('保存に失敗しました');
+    btn.disabled = false;
+    btn.textContent = '保存';
+  }
+}
+
+// ── Modal ──
+let modalDealId = null;
+
+function openDealModal(dealId) {
+  modalDealId = dealId;
+  renderDealModal(dealId);
+  document.getElementById('modalOverlay').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('open');
+  modalDealId = null;
+}
+
+// Close on Escape
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && modalDealId) closeModal(); });
+
+function renderDealModal(dealId) {
+  const d = allDeals.find(x => x.id === dealId);
+  if (!d) return;
+
+  const stageName = getStageNameById(d.stage_id);
+  const stageColor = ABC_COLORS[stageName] || '#999';
+  const staleDays = daysSince(d.update_time);
+  const staleFlag = staleDays >= 30 ? `<span class="overdue-warn">⚠ ${staleDays}日停滞</span>`
+    : staleDays >= 14 ? `<span class="stale-warn">△ ${staleDays}日未更新</span>` : '';
+
+  const locationDisplay = d[CF_LOCATION] ? (LOCATION_MAP[d[CF_LOCATION]] || d[CF_LOCATION]) : '-';
+  const timingDisplay = d[CF_TIMING] ? (TIMING_MAP[d[CF_TIMING]] || d[CF_TIMING]) : '-';
+  const propTypeDisplay = d[CF_TYPE] ? (TYPE_MAP[d[CF_TYPE]] || d[CF_TYPE]) : '-';
+  const layoutDisplay = d[CF_LAYOUT] ? (LAYOUT_MAP[d[CF_LAYOUT]] || d[CF_LAYOUT]) : '-';
+  const address = d[CF_ADDRESS] || '';
+  const commRate = d[CF_COMMISSION] != null ? d[CF_COMMISSION] : DEFAULT_COMMISSION;
+
+  const stageOptions = {};
+  [...STAGE_ORDER_ACTIVE, WON_STAGE].forEach(s => {
+    const sid = allStages.find(st => st.name === s && st.pipeline_id === d.pipeline_id);
+    if (sid) stageOptions[sid.id] = s;
+  });
+
+  const nextAct = d.next_activity_date
+    ? `${d.next_activity_date}${d.next_activity_subject ? ' - ' + d.next_activity_subject : ''}`
+    : '<span style="color:#ff3b30">未設定</span>';
+
+  let notesHtml = '';
+  if (allNotes[d.id] && allNotes[d.id].length > 0) {
+    const latest = allNotes[d.id][0];
+    const noteText = latest.content ? latest.content.replace(/<[^>]*>/g, '').substring(0, 300) : '';
+    if (noteText) {
+      notesHtml = `<div class="deal-notes"><strong>最新メモ</strong>（${latest.add_time?.substring(0,10) || ''}）: ${noteText}</div>`;
+    }
+  }
+
+  const el = document.getElementById('modalContent');
+  el.innerHTML = `
+    <div id="deal-card-${d.id}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
+        <div>
+          <div style="font-size:18px;font-weight:700;">${d.title} ${staleFlag}</div>
+          <div style="font-size:13px;color:#666;margin-top:4px;">${d.owner_name || '-'} ｜ ${d.person_name || '-'}</div>
+          <div style="margin-top:8px;">${editableField(d.id, 'stage_id', d.stage_id, stageName, 'select', stageOptions)}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:11px;color:#999;">GMV</div>
+          <div style="font-size:20px;font-weight:700;">${editableField(d.id, 'value', d.value || '', d.value ? fmt(d.value) : '未入力', 'number', null)}</div>
+          <div style="font-size:12px;color:#666;margin-top:4px;">手数料 ${editableField(d.id, CF_COMMISSION, commRate, commRate + '%', 'number', null)}</div>
+        </div>
+      </div>
+
+      <div class="deal-meta" style="grid-template-columns:repeat(3, 1fr);gap:12px;">
+        <div class="deal-meta-item"><div class="meta-label">法人/個人</div><div class="meta-value">${editableField(d.id, CF_CORP_TYPE, d[CF_CORP_TYPE], d[CF_CORP_TYPE] ? CORP_MAP[d[CF_CORP_TYPE]] || '-' : '-', 'select', CORP_MAP)}</div></div>
+        <div class="deal-meta-item"><div class="meta-label">流入経路</div><div class="meta-value">${editableField(d.id, CF_CHANNEL, d[CF_CHANNEL], d[CF_CHANNEL] ? CHANNEL_MAP[d[CF_CHANNEL]] || '-' : '-', 'select', CHANNEL_MAP)}</div></div>
+        <div class="deal-meta-item"><div class="meta-label">顧客状況</div><div class="meta-value">${editableField(d.id, CF_CUST_STATUS, d[CF_CUST_STATUS], d[CF_CUST_STATUS] ? CUST_STATUS_MAP[d[CF_CUST_STATUS]] || '-' : '-', 'select', CUST_STATUS_MAP)}</div></div>
+        <div class="deal-meta-item"><div class="meta-label">新規/乗換</div><div class="meta-value">${editableField(d.id, CF_NEW_SWITCH, d[CF_NEW_SWITCH], d[CF_NEW_SWITCH] ? NEW_SWITCH_MAP[d[CF_NEW_SWITCH]] || '-' : '-', 'select', NEW_SWITCH_MAP)}</div></div>
+        <div class="deal-meta-item"><div class="meta-label">所在地</div><div class="meta-value">${editableField(d.id, CF_LOCATION, d[CF_LOCATION], locationDisplay, 'select', LOCATION_MAP)}</div></div>
+        <div class="deal-meta-item"><div class="meta-label">物件タイプ</div><div class="meta-value">${editableField(d.id, CF_TYPE, d[CF_TYPE], propTypeDisplay, 'select', TYPE_MAP)}</div></div>
+        <div class="deal-meta-item"><div class="meta-label">許可種類</div><div class="meta-value">${editableField(d.id, CF_PERMIT, d[CF_PERMIT], d[CF_PERMIT] ? PERMIT_MAP[d[CF_PERMIT]] || '-' : '-', 'select', PERMIT_MAP)}</div></div>
+        <div class="deal-meta-item"><div class="meta-label">居室数</div><div class="meta-value">${editableField(d.id, CF_ROOMS, d[CF_ROOMS] || '', d[CF_ROOMS] || '-', 'number', null)}</div></div>
+        <div class="deal-meta-item"><div class="meta-label">間取り</div><div class="meta-value">${editableField(d.id, CF_LAYOUT, d[CF_LAYOUT], layoutDisplay, 'select', LAYOUT_MAP)}</div></div>
+        <div class="deal-meta-item"><div class="meta-label">開始時期</div><div class="meta-value">${editableField(d.id, CF_TIMING, d[CF_TIMING], timingDisplay, 'select', TIMING_MAP)}</div></div>
+        <div class="deal-meta-item"><div class="meta-label">住所</div><div class="meta-value">${editableField(d.id, CF_ADDRESS, address, address || '-', 'text', null)}</div></div>
+        <div class="deal-meta-item"><div class="meta-label">ステージ移動日</div><div class="meta-value">${d.stage_change_time?.substring(0,10) || '-'}</div></div>
+      </div>
+
+      <div class="deal-activity-row" style="margin-top:12px;">
+        <div class="act-item">📅 <strong>次アクション:</strong> ${nextAct}</div>
+        <div class="act-item">📋 <strong>最終活動:</strong> ${d.last_activity_date || '-'}</div>
+        <div class="act-item">✅ 完了: ${d.done_activities_count || 0} / 未完了: ${d.undone_activities_count || 0}</div>
+      </div>
+
+      ${notesHtml}
+
+      <div class="add-row" style="margin-top:12px;">
+        <textarea id="note-input-${d.id}" placeholder="メモを追加..." rows="1"></textarea>
+        <button class="btn-note" onclick="addDealNote(${d.id})">メモ保存</button>
+        <input type="date" id="act-date-${d.id}" style="max-width:140px;">
+        <input type="text" id="act-subj-${d.id}" placeholder="アクション内容" style="max-width:160px;">
+        <button class="btn-act" onclick="addDealActivity(${d.id})">予定追加</button>
+      </div>
+
+      <div class="deal-save-row">
+        <button class="deal-save-btn" id="save-btn-${d.id}" onclick="saveDeal(${d.id})">保存</button>
+      </div>
+    </div>`;
+}
+
+function renderABCList() {
+  const areaDeals = filterByArea(allDeals, abcArea);
+  const abcDeals = areaDeals.filter(d => isActiveDeal(d) && ABC_STAGES.includes(getStageNameById(d.stage_id)));
+
+  // Sort: A → B → C, then by stale desc
+  abcDeals.sort((a, b) => {
+    const ai = ABC_STAGES.indexOf(getStageNameById(a.stage_id));
+    const bi = ABC_STAGES.indexOf(getStageNameById(b.stage_id));
+    if (ai !== bi) return ai - bi;
+    return daysSince(b.update_time) - daysSince(a.update_time);
+  });
+
+  const container = document.getElementById('abcListContainer');
+  if (abcDeals.length === 0) {
+    container.innerHTML = '<div style="text-align:center;padding:40px;color:#999;">ABC案件はありません</div>';
+    return;
+  }
+
+  let html = '<div class="abc-list-wrap"><table class="abc-list-table"><thead><tr>';
+  html += '<th>ステージ</th><th>案件名</th><th>担当</th><th>法人/個人</th><th>エリア</th>';
+  html += '<th>GMV</th><th>手数料</th><th>物件タイプ</th><th>許可種類</th><th>居室</th>';
+  html += '<th>顧客状況</th><th>開始時期</th><th>次アクション</th><th>最終更新</th><th>停滞</th>';
+  html += '</tr></thead><tbody>';
+
+  abcDeals.forEach(d => {
+    const stageName = getStageNameById(d.stage_id);
+    const stageShort = ABC_SHORT[stageName] || '?';
+    const stageColor = ABC_COLORS[stageName] || '#999';
+    const staleDays = daysSince(d.update_time);
+    const rowClass = staleDays >= 30 ? 'row-overdue' : staleDays >= 14 ? 'row-stale' : '';
+
+    const location = d[CF_LOCATION] ? (LOCATION_MAP[d[CF_LOCATION]] || '-') : '-';
+    const commRate = d[CF_COMMISSION] != null ? d[CF_COMMISSION] + '%' : '20%';
+    const propType = d[CF_TYPE] ? (TYPE_MAP[d[CF_TYPE]] || '-') : '-';
+    const permit = d[CF_PERMIT] ? (PERMIT_MAP[d[CF_PERMIT]] || '-') : '-';
+    const rooms = d[CF_ROOMS] || '-';
+    const corpType = d[CF_CORP_TYPE] ? (CORP_MAP[d[CF_CORP_TYPE]] || '-') : '-';
+    const custStatus = d[CF_CUST_STATUS] ? (CUST_STATUS_MAP[d[CF_CUST_STATUS]] || '-') : '-';
+    const timing = d[CF_TIMING] ? (TIMING_MAP[d[CF_TIMING]] || '-') : '-';
+
+    const nextAct = d.next_activity_date
+      ? `${d.next_activity_date}${d.next_activity_subject ? '<br>' + d.next_activity_subject : ''}`
+      : '<span style="color:#ff3b30">未設定</span>';
+
+    const staleLabel = staleDays >= 30
+      ? `<span class="badge badge-red">${staleDays}日</span>`
+      : staleDays >= 14
+        ? `<span class="badge badge-orange">${staleDays}日</span>`
+        : `${staleDays}日`;
+
+    html += `<tr class="${rowClass}" onclick="openDealModal(${d.id})">
+      <td><span class="stage-badge" style="background:${stageColor}">${stageShort}</span></td>
+      <td style="white-space:normal;max-width:200px;"><strong>${d.title}</strong><br><span style="color:#999;font-size:11px;">${d.person_name || ''}</span></td>
+      <td>${d.owner_name || '-'}</td>
+      <td>${corpType}</td>
+      <td>${location}</td>
+      <td style="text-align:right;font-weight:600;">${d.value ? fmt(d.value) : '<span style="color:#ff9500">未入力</span>'}</td>
+      <td>${commRate}</td>
+      <td>${propType}</td>
+      <td>${permit}</td>
+      <td style="text-align:center;">${rooms}</td>
+      <td>${custStatus}</td>
+      <td>${timing}</td>
+      <td style="font-size:11px;">${nextAct}</td>
+      <td style="font-size:11px;">${d.update_time?.substring(0,10) || '-'}</td>
+      <td>${staleLabel}</td>
+    </tr>`;
+  });
+
+  html += '</tbody></table></div>';
+  container.innerHTML = html;
+}
+
+function renderABC() {
+  const areaDeals = filterByArea(allDeals, abcArea);
+  const abcDeals = areaDeals.filter(d => isActiveDeal(d) && ABC_STAGES.includes(getStageNameById(d.stage_id)));
+
+  // Stats
+  const statsEl = document.getElementById('abcStats');
+  const totalABC = abcDeals.length;
+  const totalGMV = abcDeals.reduce((s, d) => s + (d.value || 0), 0);
+  const weightedGMV = abcDeals.reduce((s, d) => s + (d.value || 0) * getStageProbById(d.stage_id), 0);
+  const staleCount = abcDeals.filter(d => daysSince(d.update_time) >= 14).length;
+  const emptyCount = abcDeals.reduce((s, d) => {
+    if (!d.value) s++;
+    if (!d[CF_CORP_TYPE]) s++;
+    if (!d[CF_CHANNEL]) s++;
+    if (!d[CF_CUST_STATUS]) s++;
+    if (!d[CF_NEW_SWITCH]) s++;
+    if (!d[CF_LOCATION]) s++;
+    if (!d[CF_TYPE]) s++;
+    if (!d[CF_PERMIT]) s++;
+    if (!d[CF_ROOMS]) s++;
+    if (!d[CF_LAYOUT]) s++;
+    if (!d[CF_TIMING]) s++;
+    if (!d[CF_ADDRESS]) s++;
+    return s;
+  }, 0);
+
+  statsEl.innerHTML = `
+    <div class="abc-stat-card"><div class="label">ABC合計</div><div class="value">${totalABC}件</div>
+      <div class="sub">A: ${abcDeals.filter(d=>getStageNameById(d.stage_id)===ABC_STAGES[0]).length} / B: ${abcDeals.filter(d=>getStageNameById(d.stage_id)===ABC_STAGES[1]).length} / C: ${abcDeals.filter(d=>getStageNameById(d.stage_id)===ABC_STAGES[2]).length}</div></div>
+    <div class="abc-stat-card"><div class="label">GMV総額</div><div class="value">${fmt(totalGMV)}</div><div class="sub">ABC合計</div></div>
+    <div class="abc-stat-card"><div class="label">加重GMV</div><div class="value">${fmt(weightedGMV)}</div><div class="sub">確度 × GMV</div></div>
+    <div class="abc-stat-card"><div class="label">未入力項目</div><div class="value${emptyCount > 0 ? '" style="color:#ff9500' : ''}">${emptyCount}件</div><div class="sub">クリックして入力可能</div></div>`;
+
+  // Group by stage (A → B → C)
+  const container = document.getElementById('abcContainer');
+  container.innerHTML = '';
+
+  ABC_STAGES.forEach(stage => {
+    const stageDeals = abcDeals.filter(d => getStageNameById(d.stage_id) === stage)
+      .sort((a, b) => {
+        const aStale = daysSince(a.update_time) >= 14 ? 0 : 1;
+        const bStale = daysSince(b.update_time) >= 14 ? 0 : 1;
+        if (aStale !== bStale) return aStale - bStale;
+        return (b.value || 0) - (a.value || 0);
+      });
+
+    if (stageDeals.length === 0) return;
+
+    const group = document.createElement('div');
+    group.className = 'stage-group';
+
+    const stageValue = stageDeals.reduce((s, d) => s + (d.value || 0), 0);
+    group.innerHTML = `
+      <h2><span class="stage-dot" style="background:${ABC_COLORS[stage]}"></span>${stage}
+        <span style="font-size:13px;font-weight:400;color:#999;">${stageDeals.length}件 / ${fmt(stageValue)}</span></h2>
+      <div class="stage-summary">確度: ${Math.round(getStageProbByName(stage) * 100)}% ｜ 加重金額: ${fmt(stageValue * getStageProbByName(stage))}</div>`;
+
+    stageDeals.forEach(d => {
+      const card = document.createElement('div');
+      card.className = 'deal-card';
+      card.id = `deal-card-${d.id}`;
+
+      const staleDays = daysSince(d.update_time);
+      const staleFlag = staleDays >= 30 ? `<span class="overdue-warn">⚠ ${staleDays}日停滞</span>`
+        : staleDays >= 14 ? `<span class="stale-warn">△ ${staleDays}日未更新</span>` : '';
+
+      const locationDisplay = d[CF_LOCATION] ? (LOCATION_MAP[d[CF_LOCATION]] || d[CF_LOCATION]) : '-';
+      const timingDisplay = d[CF_TIMING] ? (TIMING_MAP[d[CF_TIMING]] || d[CF_TIMING]) : '-';
+      const propTypeDisplay = d[CF_TYPE] ? (TYPE_MAP[d[CF_TYPE]] || d[CF_TYPE]) : '-';
+      const layoutDisplay = d[CF_LAYOUT] ? (LAYOUT_MAP[d[CF_LAYOUT]] || d[CF_LAYOUT]) : '-';
+      const address = d[CF_ADDRESS] || '';
+
+      const nextAct = d.next_activity_date
+        ? `${d.next_activity_date}${d.next_activity_subject ? ' - ' + d.next_activity_subject : ''}`
+        : '<span style="color:#ff3b30">未設定</span>';
+
+      const lastActDate = d.last_activity_date || '-';
+
+      let notesHtml = '';
+      if (allNotes[d.id] && allNotes[d.id].length > 0) {
+        const latest = allNotes[d.id][0];
+        const noteText = latest.content ? latest.content.replace(/<[^>]*>/g, '').substring(0, 200) : '';
+        if (noteText) {
+          notesHtml = `<div class="deal-notes"><strong>最新メモ</strong>（${latest.add_time?.substring(0,10) || ''}）: ${noteText}</div>`;
+        }
+      }
+
+      // Editable value
+      // GMV & commission
+      const valueEditable = editableField(d.id, 'value', d.value || '', d.value ? fmt(d.value) : '未入力', 'number', null);
+      const commRate = d[CF_COMMISSION] != null ? d[CF_COMMISSION] : DEFAULT_COMMISSION;
+      const commDisplay = commRate + '%';
+
+      // Stage selector — all active stages + S受注
+      const stageOptions = {};
+      [...STAGE_ORDER_ACTIVE, WON_STAGE].forEach(s => {
+        const sid = allStages.find(st => st.name === s && st.pipeline_id === d.pipeline_id);
+        if (sid) stageOptions[sid.id] = s;
+      });
+
+      card.innerHTML = `
+        <div class="deal-card-header">
+          <div>
+            <div class="deal-title">${d.title} ${staleFlag}</div>
+            <div class="deal-owner">${d.owner_name || '-'} ｜ ${d.person_name || '-'}</div>
+            <div style="margin-top:4px;">${editableField(d.id, 'stage_id', d.stage_id, getStageNameById(d.stage_id), 'select', stageOptions)}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:11px;color:#999;">GMV</div>
+            <div style="font-size:16px;font-weight:700;">${valueEditable}</div>
+            <div style="font-size:12px;color:#666;margin-top:2px;">手数料 ${editableField(d.id, CF_COMMISSION, commRate, commDisplay, 'number', null)}</div>
+          </div>
+        </div>
+        <div class="deal-meta">
+          <div class="deal-meta-item"><div class="meta-label">法人/個人</div><div class="meta-value">${editableField(d.id, CF_CORP_TYPE, d[CF_CORP_TYPE], d[CF_CORP_TYPE] ? CORP_MAP[d[CF_CORP_TYPE]] || '-' : '-', 'select', CORP_MAP)}</div></div>
+          <div class="deal-meta-item"><div class="meta-label">流入経路</div><div class="meta-value">${editableField(d.id, CF_CHANNEL, d[CF_CHANNEL], d[CF_CHANNEL] ? CHANNEL_MAP[d[CF_CHANNEL]] || '-' : '-', 'select', CHANNEL_MAP)}</div></div>
+          <div class="deal-meta-item"><div class="meta-label">顧客状況</div><div class="meta-value">${editableField(d.id, CF_CUST_STATUS, d[CF_CUST_STATUS], d[CF_CUST_STATUS] ? CUST_STATUS_MAP[d[CF_CUST_STATUS]] || '-' : '-', 'select', CUST_STATUS_MAP)}</div></div>
+          <div class="deal-meta-item"><div class="meta-label">新規/乗換</div><div class="meta-value">${editableField(d.id, CF_NEW_SWITCH, d[CF_NEW_SWITCH], d[CF_NEW_SWITCH] ? NEW_SWITCH_MAP[d[CF_NEW_SWITCH]] || '-' : '-', 'select', NEW_SWITCH_MAP)}</div></div>
+          <div class="deal-meta-item"><div class="meta-label">所在地</div><div class="meta-value">${editableField(d.id, CF_LOCATION, d[CF_LOCATION], locationDisplay, 'select', LOCATION_MAP)}</div></div>
+          <div class="deal-meta-item"><div class="meta-label">物件タイプ</div><div class="meta-value">${editableField(d.id, CF_TYPE, d[CF_TYPE], propTypeDisplay, 'select', TYPE_MAP)}</div></div>
+          <div class="deal-meta-item"><div class="meta-label">許可種類</div><div class="meta-value">${editableField(d.id, CF_PERMIT, d[CF_PERMIT], d[CF_PERMIT] ? PERMIT_MAP[d[CF_PERMIT]] || '-' : '-', 'select', PERMIT_MAP)}</div></div>
+          <div class="deal-meta-item"><div class="meta-label">居室数</div><div class="meta-value">${editableField(d.id, CF_ROOMS, d[CF_ROOMS] || '', d[CF_ROOMS] || '-', 'number', null)}</div></div>
+          <div class="deal-meta-item"><div class="meta-label">間取り</div><div class="meta-value">${editableField(d.id, CF_LAYOUT, d[CF_LAYOUT], layoutDisplay, 'select', LAYOUT_MAP)}</div></div>
+          <div class="deal-meta-item"><div class="meta-label">開始時期</div><div class="meta-value">${editableField(d.id, CF_TIMING, d[CF_TIMING], timingDisplay, 'select', TIMING_MAP)}</div></div>
+          <div class="deal-meta-item"><div class="meta-label">住所</div><div class="meta-value">${editableField(d.id, CF_ADDRESS, address, address || '-', 'text', null)}</div></div>
+          <div class="deal-meta-item"><div class="meta-label">ステージ移動</div><div class="meta-value">${d.stage_change_time?.substring(0,10) || '-'}</div></div>
+        </div>
+        <div class="deal-activity-row">
+          <div class="act-item">📅 <strong>次アクション:</strong> ${nextAct}</div>
+          <div class="act-item">📋 <strong>最終活動:</strong> ${lastActDate}</div>
+          <div class="act-item">✅ 完了: ${d.done_activities_count || 0} / 未完了: ${d.undone_activities_count || 0}</div>
+        </div>
+        ${notesHtml}
+        <div class="add-row">
+          <textarea id="note-input-${d.id}" placeholder="メモを追加..." rows="1"></textarea>
+          <button class="btn-note" onclick="addDealNote(${d.id})">メモ保存</button>
+          <input type="date" id="act-date-${d.id}" style="max-width:140px;">
+          <input type="text" id="act-subj-${d.id}" placeholder="アクション内容" style="max-width:160px;">
+          <button class="btn-act" onclick="addDealActivity(${d.id})">予定追加</button>
+        </div>
+        <div class="deal-save-row">
+          <button class="deal-save-btn" id="save-btn-${d.id}" onclick="saveDeal(${d.id})">保存</button>
+        </div>`;
+
+      group.appendChild(card);
+    });
+
+    container.appendChild(group);
+  });
+
+  if (abcDeals.length === 0) {
+    container.innerHTML = '<div style="text-align:center;padding:40px;color:#999;">ABC案件はありません</div>';
+  }
+}
+
+function getStageProbByName(name) {
+  const s = allStages.find(st => st.name === name);
+  return s ? s.deal_probability / 100 : 0;
+}
+
+// ── Render: Results tab ──
+function renderResults() {
+  const deals = filterByArea(allDeals, resultArea);
+  // Won = S：受注 stage (open) + PD-won deals
+  const won = deals.filter(d => isWonDeal(d) || d.status === 'won');
+  const lost = deals.filter(isLostDeal);
+
+  const now = new Date();
+  const thisMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+
+  const wonThisMonth = won.filter(d => monthKey(getWonDate(d)) === thisMonth);
+  const lostThisMonth = lost.filter(d => monthKey(getLostDate(d)) === thisMonth);
+
+  const totalClosed = won.length + lost.length;
+  const winRate = totalClosed > 0 ? (won.length / totalClosed * 100) : 0;
+
+  // Average days to win (add_time → stage_change_time for S stage deals)
+  const wonWithDays = won.filter(d => d.add_time && getWonDate(d));
+  const avgDays = wonWithDays.length > 0 ? wonWithDays.reduce((s, d) => s + daysBetween(d.add_time, getWonDate(d)), 0) / wonWithDays.length : 0;
+
+  document.getElementById('kpiWonMonth').textContent = wonThisMonth.length + '件';
+  document.getElementById('kpiWonMonthSub').textContent = fmt(wonThisMonth.reduce((s, d) => s + (d.value || 0), 0));
+  document.getElementById('kpiLostMonth').textContent = lostThisMonth.length + '件';
+  document.getElementById('kpiLostMonthSub').textContent = fmt(lostThisMonth.reduce((s, d) => s + (d.value || 0), 0));
+  document.getElementById('kpiWinRate').textContent = winRate.toFixed(1) + '%';
+  document.getElementById('kpiWonTotal').textContent = won.length + '件';
+  document.getElementById('kpiWonTotalSub').textContent = fmt(won.reduce((s, d) => s + (d.value || 0), 0));
+  document.getElementById('kpiAvgDays').textContent = Math.round(avgDays) + '日';
+
+  // Monthly trend — use getWonDate/getLostDate instead of won_time/lost_time
+  const months = getMonthRange(deals);
+  const monthlyWon = months.map(m => won.filter(d => monthKey(getWonDate(d)) === m).length);
+  const monthlyLost = months.map(m => lost.filter(d => monthKey(getLostDate(d)) === m).length);
+  const monthlyWonValue = months.map(m => won.filter(d => monthKey(getWonDate(d)) === m).reduce((s, d) => s + (d.value || 0), 0));
+
+  destroyChart('monthly');
+  chartInstances.monthly = new Chart(document.getElementById('chartMonthly'), {
+    type: 'bar',
+    data: {
+      labels: months.map(m => m.substring(2)),
+      datasets: [
+        { label: '成約', data: monthlyWon, backgroundColor: '#34c759' },
+        { label: '失注', data: monthlyLost, backgroundColor: '#ff3b30' },
+      ]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'top' } }, scales: { x: { ticks: { font: { size: 11 } } } } }
+  });
+
+  // Win rate trend
+  const monthlyWinRate = months.map((m, i) => {
+    const w = monthlyWon[i];
+    const total = w + monthlyLost[i];
+    return total > 0 ? (w / total * 100) : null;
+  });
+
+  destroyChart('winRate');
+  chartInstances.winRate = new Chart(document.getElementById('chartWinRate'), {
+    type: 'line',
+    data: {
+      labels: months.map(m => m.substring(2)),
+      datasets: [{ label: '成約率', data: monthlyWinRate, borderColor: '#007aff', backgroundColor: 'rgba(0,122,255,0.1)', fill: true, tension: 0.3, spanGaps: true }]
+    },
+    options: { responsive: true, scales: { y: { ticks: { callback: v => v + '%' }, min: 0, max: 100 }, x: { ticks: { font: { size: 11 } } } } }
+  });
+
+  destroyChart('wonValue');
+  chartInstances.wonValue = new Chart(document.getElementById('chartWonValue'), {
+    type: 'bar',
+    data: {
+      labels: months.map(m => m.substring(2)),
+      datasets: [{ label: '成約金額', data: monthlyWonValue, backgroundColor: '#34c759' }]
+    },
+    options: { responsive: true, scales: { y: { ticks: { callback: v => '¥' + (v/10000).toFixed(0) + '万' } }, x: { ticks: { font: { size: 11 } } } } }
+  });
+}
+
+function daysBetween(d1, d2) {
+  return Math.floor((new Date(d2) - new Date(d1)) / 86400000);
+}
+
+function getMonthRange(deals) {
+  const dates = deals.map(d => {
+    if (isWonDeal(d)) return getWonDate(d);
+    if (isLostDeal(d)) return getLostDate(d);
+    return d.won_time || d.lost_time || d.add_time;
+  }).filter(Boolean).map(d => d.substring(0, 7));
+  if (dates.length === 0) return [];
+  const sorted = [...new Set(dates)].sort();
+  const start = sorted[0];
+  const end = sorted[sorted.length - 1];
+  const months = [];
+  let [y, m] = start.split('-').map(Number);
+  const [ey, em] = end.split('-').map(Number);
+  while (y < ey || (y === ey && m <= em)) {
+    months.push(`${y}-${String(m).padStart(2, '0')}`);
+    m++;
+    if (m > 12) { m = 1; y++; }
+  }
+  // Show only last 12 months
+  return months.slice(-12);
+}
+
+// ── Render: Forecast tab ──
+function renderForecast() {
+  // Active pipeline deals (not won, not lost)
+  const activePipeDeals = allDeals.filter(d => PIPELINE_IDS.includes(d.pipeline_id) && isActiveDeal(d));
+  // Won = S：受注 stage + PD-won
+  const wonDeals = allDeals.filter(d => PIPELINE_IDS.includes(d.pipeline_id) && (isWonDeal(d) || d.status === 'won'));
+
+  // Weighted pipeline
+  const weighted = activePipeDeals.reduce((s, d) => s + (d.value || 0) * getStageProbById(d.stage_id), 0);
+  document.getElementById('fcWeighted').textContent = fmt(weighted);
+
+  // This month forecast (deals with expected close date this month)
+  const now = new Date();
+  const thisMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const thisMonthExpected = activePipeDeals.filter(d => d.expected_close_date && d.expected_close_date.substring(0, 7) === thisMonth);
+  const thisMonthForecast = thisMonthExpected.reduce((s, d) => s + (d.value || 0) * getStageProbById(d.stage_id), 0);
+  const wonThisMonth = wonDeals.filter(d => monthKey(getWonDate(d)) === thisMonth);
+  const actualThisMonth = wonThisMonth.reduce((s, d) => s + (d.value || 0), 0);
+  document.getElementById('fcThisMonth').textContent = fmt(actualThisMonth + thisMonthForecast);
+
+  // BEP calculation
+  const currentProperties = 120; // from KPI data
+  const neededForBEP = Math.max(0, BEP_PROPERTIES - currentProperties);
+  const weightedDealsCount = activePipeDeals.reduce((s, d) => s + getStageProbById(d.stage_id), 0);
+  document.getElementById('fcBEP').textContent = neededForBEP > 0 ? `あと${neededForBEP}件` : '達成済み';
+  document.getElementById('fcBEPSub').textContent = `現在${currentProperties}件 / BEP ${BEP_PROPERTIES}件（加重見込み: ${Math.round(weightedDealsCount)}件）`;
+
+  // Targets & progress
+  if (targets.deals || targets.value) {
+    document.getElementById('targetProgressSection').style.display = 'block';
+    document.getElementById('targetDeals').value = targets.deals || '';
+    document.getElementById('targetValue').value = targets.value ? Number(targets.value).toLocaleString() : '';
+    document.getElementById('forecastMonth').textContent = thisMonth;
+
+    if (targets.deals) {
+      const pct = Math.min(100, wonThisMonth.length / targets.deals * 100);
+      document.getElementById('progressDeals').style.width = pct + '%';
+      document.getElementById('progressDeals').textContent = Math.round(pct) + '%';
+      document.getElementById('progDealsActual').textContent = wonThisMonth.length + '件';
+      document.getElementById('progDealsTarget').textContent = '目標: ' + targets.deals + '件';
+    }
+    if (targets.value) {
+      const pct = Math.min(100, actualThisMonth / targets.value * 100);
+      document.getElementById('progressValue').style.width = pct + '%';
+      document.getElementById('progressValue').textContent = Math.round(pct) + '%';
+      document.getElementById('progValueActual').textContent = fmt(actualThisMonth);
+      document.getElementById('progValueTarget').textContent = '目標: ' + fmt(targets.value);
+    }
+  }
+
+  // Monthly forecast chart
+  const futureMonths = [];
+  let fy = now.getFullYear(), fm = now.getMonth() + 1;
+  for (let i = 0; i < 6; i++) {
+    futureMonths.push(`${fy}-${String(fm).padStart(2, '0')}`);
+    fm++;
+    if (fm > 12) { fm = 1; fy++; }
+  }
+
+  const forecastData = futureMonths.map(m => {
+    const mDeals = activePipeDeals.filter(d => d.expected_close_date && d.expected_close_date.substring(0, 7) === m);
+    return mDeals.reduce((s, d) => s + (d.value || 0) * getStageProbById(d.stage_id), 0);
+  });
+  const actualData = futureMonths.map(m => {
+    return wonDeals.filter(d => monthKey(getWonDate(d)) === m).reduce((s, d) => s + (d.value || 0), 0);
+  });
+  const targetLine = futureMonths.map(() => targets.value || null);
+
+  destroyChart('forecast');
+  chartInstances.forecast = new Chart(document.getElementById('chartForecast'), {
+    type: 'bar',
+    data: {
+      labels: futureMonths.map(m => m.substring(2)),
+      datasets: [
+        { label: '実績', data: actualData, backgroundColor: '#34c759' },
+        { label: '予測（加重）', data: forecastData, backgroundColor: 'rgba(0,122,255,0.3)', borderColor: '#007aff', borderWidth: 1 },
+        ...(targets.value ? [{ label: '目標', data: targetLine, type: 'line', borderColor: '#ff3b30', borderDash: [5,5], pointRadius: 0, fill: false }] : []),
+      ]
+    },
+    options: { responsive: true, scales: { y: { ticks: { callback: v => '¥' + (v/10000).toFixed(0) + '万' }, stacked: false } }, plugins: { legend: { position: 'top' } } }
+  });
+
+  // Target vs actual (past 6 months)
+  const pastMonths = [];
+  let py = now.getFullYear(), pm = now.getMonth() + 1;
+  for (let i = 5; i >= 0; i--) {
+    let mm = pm - i, yy = py;
+    while (mm <= 0) { mm += 12; yy--; }
+    pastMonths.push(`${yy}-${String(mm).padStart(2, '0')}`);
+  }
+
+  const pastActual = pastMonths.map(m => wonDeals.filter(d => monthKey(getWonDate(d)) === m).reduce((s, d) => s + (d.value || 0), 0));
+  const pastTarget = pastMonths.map(() => targets.value || null);
+  const pastActualCount = pastMonths.map(m => wonDeals.filter(d => monthKey(getWonDate(d)) === m).length);
+  const pastTargetCount = pastMonths.map(() => targets.deals || null);
+
+  destroyChart('targetVsActual');
+  chartInstances.targetVsActual = new Chart(document.getElementById('chartTargetVsActual'), {
+    type: 'bar',
+    data: {
+      labels: pastMonths.map(m => m.substring(2)),
+      datasets: [
+        { label: '成約件数', data: pastActualCount, backgroundColor: '#007aff', yAxisID: 'y' },
+        ...(targets.deals ? [{ label: '目標件数', data: pastTargetCount, type: 'line', borderColor: '#ff3b30', borderDash: [5,5], pointRadius: 3, fill: false, yAxisID: 'y' }] : []),
+      ]
+    },
+    options: { responsive: true, scales: { y: { position: 'left', title: { display: true, text: '件数' } } }, plugins: { legend: { position: 'top' } } }
+  });
+}
+
+function saveTargets() {
+  const deals = document.getElementById('targetDeals').value;
+  const valueStr = document.getElementById('targetValue').value.replace(/,/g, '');
+  targets = {};
+  if (deals) targets.deals = parseInt(deals);
+  if (valueStr) targets.value = parseInt(valueStr);
+  localStorage.setItem('salesTargets', JSON.stringify(targets));
+  renderForecast();
+}
+
+// ── Render: Activity tab ──
+async function renderActivity() {
+  try {
+    // Fetch activities
+    const now = new Date();
+    const thisMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    const activities = await apiFetchAll('/activities', { type: 'call,meeting,email,task', start_date: '2024-01-01', end_date: now.toISOString().substring(0, 10) });
+
+    const monthActs = activities.filter(a => a.due_date && a.due_date.substring(0, 7) === thisMonth);
+    const doneMonth = monthActs.filter(a => a.done);
+    const overdue = activities.filter(a => !a.done && a.due_date && a.due_date < now.toISOString().substring(0, 10));
+
+    // Won deals for ratio
+    const wonDeals = allDeals.filter(d => d.status === 'won' && PIPELINE_IDS.includes(d.pipeline_id));
+    const avgActPerWon = wonDeals.length > 0 ? (activities.filter(a => a.done).length / wonDeals.length) : 0;
+
+    document.getElementById('kpiActMonth').textContent = monthActs.length + '件';
+    document.getElementById('kpiActMonthSub').textContent = `完了: ${doneMonth.length}件`;
+    document.getElementById('kpiActDone').textContent = monthActs.length > 0 ? (doneMonth.length / monthActs.length * 100).toFixed(0) + '%' : '-';
+    document.getElementById('kpiActOverdue').textContent = overdue.length + '件';
+    document.getElementById('kpiActPerWon').textContent = avgActPerWon.toFixed(1) + '件';
+
+    // Monthly activity trend
+    const months = [];
+    let y = now.getFullYear(), m = now.getMonth() + 1;
+    for (let i = 11; i >= 0; i--) {
+      let mm = m - i, yy = y;
+      while (mm <= 0) { mm += 12; yy--; }
+      months.push(`${yy}-${String(mm).padStart(2, '0')}`);
+    }
+
+    const monthlyTotal = months.map(mo => activities.filter(a => a.due_date && a.due_date.substring(0, 7) === mo).length);
+    const monthlyDone = months.map(mo => activities.filter(a => a.due_date && a.due_date.substring(0, 7) === mo && a.done).length);
+
+    destroyChart('activity');
+    chartInstances.activity = new Chart(document.getElementById('chartActivity'), {
+      type: 'bar',
+      data: {
+        labels: months.map(m => m.substring(2)),
+        datasets: [
+          { label: '全体', data: monthlyTotal, backgroundColor: 'rgba(0,122,255,0.3)', borderColor: '#007aff', borderWidth: 1 },
+          { label: '完了', data: monthlyDone, backgroundColor: '#34c759' },
+        ]
+      },
+      options: { responsive: true, plugins: { legend: { position: 'top' } } }
+    });
+
+    // Type breakdown
+    const types = {};
+    monthActs.forEach(a => {
+      const t = a.type || 'その他';
+      types[t] = (types[t] || 0) + 1;
+    });
+    const typeLabels = Object.keys(types);
+    const typeColors = ['#007aff', '#34c759', '#ff9500', '#af52de', '#ff3b30', '#5856d6'];
+
+    destroyChart('actType');
+    chartInstances.actType = new Chart(document.getElementById('chartActType'), {
+      type: 'doughnut',
+      data: {
+        labels: typeLabels,
+        datasets: [{ data: Object.values(types), backgroundColor: typeColors.slice(0, typeLabels.length) }]
+      },
+      options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+    });
+
+    // User breakdown
+    const users = {};
+    monthActs.forEach(a => {
+      const name = a.owner_name || '不明';
+      users[name] = (users[name] || 0) + 1;
+    });
+
+    destroyChart('actUser');
+    chartInstances.actUser = new Chart(document.getElementById('chartActUser'), {
+      type: 'bar',
+      data: {
+        labels: Object.keys(users),
+        datasets: [{ label: '活動数', data: Object.values(users), backgroundColor: '#007aff' }]
+      },
+      options: { responsive: true, indexAxis: 'y', plugins: { legend: { display: false } } }
+    });
+  } catch (e) {
+    console.error('Activity load error:', e);
+  }
+}
+</script>
+</body>
+</html>
