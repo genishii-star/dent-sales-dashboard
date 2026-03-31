@@ -153,9 +153,11 @@
 
     /* ABC list table */
     .abc-list-table { width: 100%; border-collapse: collapse; font-size: 12px; background: white; border-radius: 12px; overflow: hidden; }
-    .abc-list-table th { text-align: left; padding: 10px 10px; border-bottom: 2px solid #e5e5e5; color: #666; font-weight: 600; font-size: 11px; white-space: nowrap; position: sticky; top: 0; background: white; z-index: 1; cursor: pointer; user-select: none; }
-    .abc-list-table th:hover { color: #007aff; }
-    .abc-list-table th .sort-arrow { font-size: 10px; margin-left: 2px; color: #007aff; }
+    .abc-list-table th { text-align: left; padding: 10px 10px; border-bottom: 2px solid #e5e5e5; color: #666; font-weight: 600; font-size: 11px; white-space: nowrap; position: sticky; top: 0; background: white; z-index: 1; cursor: pointer; user-select: none; transition: color 0.1s; }
+    .abc-list-table th:hover { color: #007aff; background: #f8f9fa; }
+    .abc-list-table th::after { content: ' ⇅'; font-size: 9px; color: #ccc; }
+    .abc-list-table th.sorted::after { content: ''; }
+    .abc-list-table th .sort-arrow { font-size: 10px; margin-left: 3px; color: #007aff; font-weight: 700; }
     .abc-list-table td { padding: 8px 10px; border-bottom: 1px solid #f0f0f0; white-space: nowrap; }
     .abc-list-table tr:hover { background: #f8f9fa; }
     .abc-list-table tr.row-stale { background: #fffef5; }
@@ -1021,6 +1023,9 @@ function sortArrow(sortState, col) {
   if (sortState.col !== col) return '';
   return `<span class="sort-arrow">${sortState.asc ? '▲' : '▼'}</span>`;
 }
+function thClass(sortState, col) {
+  return sortState.col === col ? ' class="sorted"' : '';
+}
 function toggleLeadSort(col) {
   if (leadSort.col === col) { leadSort.asc = !leadSort.asc; }
   else { leadSort.col = col; leadSort.asc = true; }
@@ -1075,19 +1080,20 @@ function renderLeads() {
 
   const sa = (col) => sortArrow(leadSort, col);
   let html = '<div class="abc-list-wrap"><table class="abc-list-table"><thead><tr>';
-  html += `<th onclick="toggleLeadSort('add_time')">問合せ日${sa('add_time')}</th>`;
-  html += `<th onclick="toggleLeadSort('stage')">ステージ${sa('stage')}</th>`;
-  html += `<th onclick="toggleLeadSort('title')">案件名${sa('title')}</th>`;
-  html += `<th onclick="toggleLeadSort('owner')">担当${sa('owner')}</th>`;
-  html += `<th onclick="toggleLeadSort('corp')">法人/個人${sa('corp')}</th>`;
-  html += `<th onclick="toggleLeadSort('channel')">流入経路${sa('channel')}</th>`;
-  html += `<th onclick="toggleLeadSort('location')">エリア${sa('location')}</th>`;
-  html += `<th onclick="toggleLeadSort('value')">GMV${sa('value')}</th>`;
-  html += `<th onclick="toggleLeadSort('commission')">手数料${sa('commission')}</th>`;
-  html += `<th onclick="toggleLeadSort('cust_status')">顧客状況${sa('cust_status')}</th>`;
-  html += `<th onclick="toggleLeadSort('new_switch')">新規/乗換${sa('new_switch')}</th>`;
-  html += `<th onclick="toggleLeadSort('next_act')">次アクション${sa('next_act')}</th>`;
-  html += `<th onclick="toggleLeadSort('elapsed')">経過日数${sa('elapsed')}</th>`;
+  const tc = (col) => thClass(leadSort, col);
+  html += `<th${tc('add_time')} onclick="toggleLeadSort('add_time')">問合せ日${sa('add_time')}</th>`;
+  html += `<th${tc('stage')} onclick="toggleLeadSort('stage')">ステージ${sa('stage')}</th>`;
+  html += `<th${tc('title')} onclick="toggleLeadSort('title')">案件名${sa('title')}</th>`;
+  html += `<th${tc('owner')} onclick="toggleLeadSort('owner')">担当${sa('owner')}</th>`;
+  html += `<th${tc('corp')} onclick="toggleLeadSort('corp')">法人/個人${sa('corp')}</th>`;
+  html += `<th${tc('channel')} onclick="toggleLeadSort('channel')">流入経路${sa('channel')}</th>`;
+  html += `<th${tc('location')} onclick="toggleLeadSort('location')">エリア${sa('location')}</th>`;
+  html += `<th${tc('value')} onclick="toggleLeadSort('value')">GMV${sa('value')}</th>`;
+  html += `<th${tc('commission')} onclick="toggleLeadSort('commission')">手数料${sa('commission')}</th>`;
+  html += `<th${tc('cust_status')} onclick="toggleLeadSort('cust_status')">顧客状況${sa('cust_status')}</th>`;
+  html += `<th${tc('new_switch')} onclick="toggleLeadSort('new_switch')">新規/乗換${sa('new_switch')}</th>`;
+  html += `<th${tc('next_act')} onclick="toggleLeadSort('next_act')">次アクション${sa('next_act')}</th>`;
+  html += `<th${tc('elapsed')} onclick="toggleLeadSort('elapsed')">経過日数${sa('elapsed')}</th>`;
   html += '</tr></thead><tbody>';
 
   sortedLeads.forEach(d => {
@@ -1272,22 +1278,23 @@ function renderABCList() {
   }
 
   const sa = (col) => sortArrow(abcListSort, col);
+  const tc = (col) => thClass(abcListSort, col);
   let html = '<div class="abc-list-wrap"><table class="abc-list-table"><thead><tr>';
-  html += `<th onclick="toggleAbcSort('stage')">ステージ${sa('stage')}</th>`;
-  html += `<th onclick="toggleAbcSort('title')">案件名${sa('title')}</th>`;
-  html += `<th onclick="toggleAbcSort('owner')">担当${sa('owner')}</th>`;
-  html += `<th onclick="toggleAbcSort('corp')">法人/個人${sa('corp')}</th>`;
-  html += `<th onclick="toggleAbcSort('location')">エリア${sa('location')}</th>`;
-  html += `<th onclick="toggleAbcSort('value')">GMV${sa('value')}</th>`;
-  html += `<th onclick="toggleAbcSort('commission')">手数料${sa('commission')}</th>`;
-  html += `<th onclick="toggleAbcSort('type')">物件タイプ${sa('type')}</th>`;
-  html += `<th onclick="toggleAbcSort('permit')">許可種類${sa('permit')}</th>`;
-  html += `<th onclick="toggleAbcSort('rooms')">居室${sa('rooms')}</th>`;
-  html += `<th onclick="toggleAbcSort('cust_status')">顧客状況${sa('cust_status')}</th>`;
-  html += `<th onclick="toggleAbcSort('timing')">開始時期${sa('timing')}</th>`;
-  html += `<th onclick="toggleAbcSort('next_act')">次アクション${sa('next_act')}</th>`;
-  html += `<th onclick="toggleAbcSort('update_time')">最終更新${sa('update_time')}</th>`;
-  html += `<th onclick="toggleAbcSort('stale')">停滞${sa('stale')}</th>`;
+  html += `<th${tc('stage')} onclick="toggleAbcSort('stage')">ステージ${sa('stage')}</th>`;
+  html += `<th${tc('title')} onclick="toggleAbcSort('title')">案件名${sa('title')}</th>`;
+  html += `<th${tc('owner')} onclick="toggleAbcSort('owner')">担当${sa('owner')}</th>`;
+  html += `<th${tc('corp')} onclick="toggleAbcSort('corp')">法人/個人${sa('corp')}</th>`;
+  html += `<th${tc('location')} onclick="toggleAbcSort('location')">エリア${sa('location')}</th>`;
+  html += `<th${tc('value')} onclick="toggleAbcSort('value')">GMV${sa('value')}</th>`;
+  html += `<th${tc('commission')} onclick="toggleAbcSort('commission')">手数料${sa('commission')}</th>`;
+  html += `<th${tc('type')} onclick="toggleAbcSort('type')">物件タイプ${sa('type')}</th>`;
+  html += `<th${tc('permit')} onclick="toggleAbcSort('permit')">許可種類${sa('permit')}</th>`;
+  html += `<th${tc('rooms')} onclick="toggleAbcSort('rooms')">居室${sa('rooms')}</th>`;
+  html += `<th${tc('cust_status')} onclick="toggleAbcSort('cust_status')">顧客状況${sa('cust_status')}</th>`;
+  html += `<th${tc('timing')} onclick="toggleAbcSort('timing')">開始時期${sa('timing')}</th>`;
+  html += `<th${tc('next_act')} onclick="toggleAbcSort('next_act')">次アクション${sa('next_act')}</th>`;
+  html += `<th${tc('update_time')} onclick="toggleAbcSort('update_time')">最終更新${sa('update_time')}</th>`;
+  html += `<th${tc('stale')} onclick="toggleAbcSort('stale')">停滞${sa('stale')}</th>`;
   html += '</tr></thead><tbody>';
 
   sortedAbc.forEach(d => {
