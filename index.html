@@ -205,6 +205,7 @@
 
 <div class="tab-nav">
   <button class="tab-btn active" onclick="switchTab('pipeline')">パイプライン</button>
+  <button class="tab-btn" onclick="switchTab('leads')">新規リード</button>
   <button class="tab-btn" onclick="switchTab('abc')">ABC詳細</button>
   <button class="tab-btn" onclick="switchTab('results')">営業実績</button>
   <button class="tab-btn" onclick="switchTab('forecast')">売上予測</button>
@@ -253,6 +254,33 @@
       <tbody id="staleBody"><tr><td colspan="5" class="loading">読み込み中...</td></tr></tbody>
     </table>
   </div>
+</div>
+</div>
+
+<!-- ========== 新規リード タブ ========== -->
+<div id="tab-leads" class="tab-content">
+<div class="container">
+  <div class="filter-bar">
+    <label>期間</label>
+    <div class="filter-pills" id="leadPeriodPills">
+      <button class="pill active" onclick="setLeadPeriod('1w')">直近1週間</button>
+      <button class="pill" onclick="setLeadPeriod('month')">今月</button>
+      <button class="pill" onclick="setLeadPeriod('prevmonth')">前月</button>
+      <button class="pill" onclick="setLeadPeriod('quarter')">四半期</button>
+      <button class="pill" onclick="setLeadPeriod('fy')">今期</button>
+      <button class="pill" onclick="setLeadPeriod('prevfy')">前期</button>
+    </div>
+    <label style="margin-left:16px;">エリア</label>
+    <div class="filter-pills" id="leadAreaPills">
+      <button class="pill active" onclick="setLeadArea('all')">全体</button>
+      <button class="pill" onclick="setLeadArea(1)">関西</button>
+      <button class="pill" onclick="setLeadArea(7)">関東</button>
+    </div>
+  </div>
+
+  <div class="kpi-grid-5" id="leadStats"></div>
+
+  <div id="leadListContainer"><div class="loading">読み込み中...</div></div>
 </div>
 </div>
 
@@ -475,6 +503,8 @@ let currentArea = 'all';
 let resultArea = 'all';
 let abcArea = 'all';
 let abcView = 'list';
+let leadPeriod = '1w';
+let leadArea = 'all';
 let chartInstances = {};
 let targets = JSON.parse(localStorage.getItem('salesTargets') || '{}');
 
@@ -590,6 +620,7 @@ async function loadAll() {
     allDeals = [...openDeals, ...wonDeals, ...lostDeals].filter(d => PIPELINE_IDS.includes(d.pipeline_id));
 
     renderPipeline();
+    renderLeads();
     renderABCList();
     renderABC();
     renderResults();
@@ -878,6 +909,166 @@ async function saveDeal(dealId) {
   }
 }
 
+// ── Leads tab ──
+function setLeadPeriod(v) {
+  leadPeriod = v;
+  document.querySelectorAll('#leadPeriodPills .pill').forEach(p => p.classList.remove('active'));
+  event.target.classList.add('active');
+  renderLeads();
+}
+function setLeadArea(v) {
+  leadArea = v;
+  document.querySelectorAll('#leadAreaPills .pill').forEach(p => p.classList.remove('active'));
+  event.target.classList.add('active');
+  renderLeads();
+}
+
+function getLeadDateRange(period) {
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth(); // month is 0-indexed
+  let from, to;
+
+  switch (period) {
+    case '1w':
+      from = new Date(now); from.setDate(from.getDate() - 7);
+      to = now;
+      break;
+    case 'month':
+      from = new Date(y, m, 1);
+      to = now;
+      break;
+    case 'prevmonth':
+      from = new Date(y, m - 1, 1);
+      to = new Date(y, m, 0); // last day of prev month
+      break;
+    case 'quarter': {
+      // Current quarter start (fiscal year starts March)
+      const fiscalMonth = (m + 10) % 12; // Mar=0, Apr=1, ...
+      const qStart = fiscalMonth - (fiscalMonth % 3);
+      const calMonth = (qStart + 2) % 12; // back to calendar month
+      const calYear = qStart + 2 < m ? y : (m < 2 ? y - 1 : y);
+      from = new Date(y, m - (fiscalMonth % 3), 1);
+      to = now;
+      break;
+    }
+    case 'fy':
+      // Fiscal year: Mar ~ Feb. Current FY.
+      if (m >= 2) { // Mar(2) onwards
+        from = new Date(y, 2, 1); // Mar 1
+      } else {
+        from = new Date(y - 1, 2, 1);
+      }
+      to = now;
+      break;
+    case 'prevfy':
+      if (m >= 2) {
+        from = new Date(y - 1, 2, 1);
+        to = new Date(y, 1, 28); // end of Feb
+      } else {
+        from = new Date(y - 2, 2, 1);
+        to = new Date(y - 1, 1, 28);
+      }
+      break;
+    default:
+      from = new Date(now); from.setDate(from.getDate() - 7);
+      to = now;
+  }
+  return { from: from.toISOString().substring(0, 10), to: to.toISOString().substring(0, 10) };
+}
+
+function renderLeads() {
+  const { from, to } = getLeadDateRange(leadPeriod);
+  const areaDeals = filterByArea(allDeals, leadArea);
+
+  // Filter by add_time within range
+  const leads = areaDeals.filter(d => {
+    const addDate = d.add_time?.substring(0, 10);
+    return addDate && addDate >= from && addDate <= to;
+  }).sort((a, b) => (b.add_time || '').localeCompare(a.add_time || ''));
+
+  // Stats
+  const total = leads.length;
+  const activeLeads = leads.filter(isActiveDeal);
+  const wonLeads = leads.filter(d => isWonDeal(d) || d.status === 'won');
+  const lostLeads = leads.filter(isLostDeal);
+  const withValue = leads.filter(d => (d.value || 0) > 0);
+  const totalGMV = leads.reduce((s, d) => s + (d.value || 0), 0);
+
+  const statsEl = document.getElementById('leadStats');
+  statsEl.innerHTML = `
+    <div class="kpi-card neutral"><div class="label">新規リード</div><div class="value">${total}件</div><div class="sub">${from} 〜 ${to}</div></div>
+    <div class="kpi-card neutral"><div class="label">進行中</div><div class="value">${activeLeads.length}件</div><div class="sub">商談中</div></div>
+    <div class="kpi-card positive"><div class="label">受注</div><div class="value">${wonLeads.length}件</div><div class="sub">S：受注到達</div></div>
+    <div class="kpi-card negative"><div class="label">失注</div><div class="value">${lostLeads.length}件</div><div class="sub">G：興味なし</div></div>
+    <div class="kpi-card neutral"><div class="label">GMV合計</div><div class="value">${fmt(totalGMV)}</div><div class="sub">${withValue.length}件に金額設定</div></div>`;
+
+  // Table
+  const container = document.getElementById('leadListContainer');
+  if (leads.length === 0) {
+    container.innerHTML = '<div style="text-align:center;padding:40px;color:#999;">該当期間のリードはありません</div>';
+    return;
+  }
+
+  // Stage color map for all stages
+  const allStageColors = {};
+  STAGE_ORDER_ACTIVE.forEach((s, i) => { allStageColors[s] = STAGE_COLORS[i]; });
+  allStageColors[WON_STAGE] = '#00c7be';
+  allStageColors[LOST_STAGE] = '#ff3b30';
+
+  let html = '<div class="abc-list-wrap"><table class="abc-list-table"><thead><tr>';
+  html += '<th>問合せ日</th><th>ステージ</th><th>案件名</th><th>担当</th><th>法人/個人</th>';
+  html += '<th>流入経路</th><th>エリア</th><th>GMV</th><th>手数料</th><th>顧客状況</th>';
+  html += '<th>新規/乗換</th><th>次アクション</th><th>経過日数</th>';
+  html += '</tr></thead><tbody>';
+
+  leads.forEach(d => {
+    const stageName = getStageNameById(d.stage_id);
+    const stageColor = allStageColors[stageName] || '#999';
+    const isLost = isLostDeal(d);
+    const isWon = isWonDeal(d) || d.status === 'won';
+    let stageLabel = stageName;
+    // Shorten stage name for display
+    if (ABC_SHORT[stageName]) stageLabel = ABC_SHORT[stageName];
+    else if (stageName === WON_STAGE) stageLabel = 'S';
+    else if (stageName === LOST_STAGE) stageLabel = 'G';
+    else if (stageName === 'リード') stageLabel = 'リード';
+    else { const m = stageName.match(/^([A-Z])：/); if (m) stageLabel = m[1]; }
+
+    const location = d[CF_LOCATION] ? (LOCATION_MAP[d[CF_LOCATION]] || '-') : '-';
+    const corpType = d[CF_CORP_TYPE] ? (CORP_MAP[d[CF_CORP_TYPE]] || '-') : '-';
+    const channel = d[CF_CHANNEL] ? (CHANNEL_MAP[d[CF_CHANNEL]] || '-') : '-';
+    const custStatus = d[CF_CUST_STATUS] ? (CUST_STATUS_MAP[d[CF_CUST_STATUS]] || '-') : '-';
+    const newSwitch = d[CF_NEW_SWITCH] ? (NEW_SWITCH_MAP[d[CF_NEW_SWITCH]] || '-') : '-';
+    const commRate = d[CF_COMMISSION] != null ? d[CF_COMMISSION] + '%' : '20%';
+    const elapsed = daysSince(d.add_time);
+
+    const nextAct = d.next_activity_date
+      ? `${d.next_activity_date}`
+      : (isLost || isWon ? '-' : '<span style="color:#ff3b30">未設定</span>');
+
+    const rowStyle = isLost ? 'opacity:0.5;' : isWon ? 'background:#f0fff4;' : '';
+
+    html += `<tr style="${rowStyle}" onclick="openDealModal(${d.id})">
+      <td>${d.add_time?.substring(0, 10) || '-'}</td>
+      <td><span class="stage-badge" style="background:${stageColor}">${stageLabel}</span></td>
+      <td style="white-space:normal;max-width:200px;"><strong>${d.title}</strong><br><span style="color:#999;font-size:11px;">${d.person_name || ''}</span></td>
+      <td>${d.owner_name || '-'}</td>
+      <td>${corpType}</td>
+      <td>${channel}</td>
+      <td>${location}</td>
+      <td style="text-align:right;font-weight:600;">${d.value ? fmt(d.value) : '-'}</td>
+      <td>${commRate}</td>
+      <td>${custStatus}</td>
+      <td>${newSwitch}</td>
+      <td style="font-size:11px;">${nextAct}</td>
+      <td>${elapsed}日</td>
+    </tr>`;
+  });
+
+  html += '</tbody></table></div>';
+  container.innerHTML = html;
+}
+
 // ── Modal ──
 let modalDealId = null;
 
@@ -900,7 +1091,11 @@ function renderDealModal(dealId) {
   if (!d) return;
 
   const stageName = getStageNameById(d.stage_id);
-  const stageColor = ABC_COLORS[stageName] || '#999';
+  const allStageColorMap = {};
+  STAGE_ORDER_ACTIVE.forEach((s, i) => { allStageColorMap[s] = STAGE_COLORS[i]; });
+  allStageColorMap[WON_STAGE] = '#00c7be';
+  allStageColorMap[LOST_STAGE] = '#ff3b30';
+  const stageColor = allStageColorMap[stageName] || '#999';
   const staleDays = daysSince(d.update_time);
   const staleFlag = staleDays >= 30 ? `<span class="overdue-warn">⚠ ${staleDays}日停滞</span>`
     : staleDays >= 14 ? `<span class="stale-warn">△ ${staleDays}日未更新</span>` : '';
